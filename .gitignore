@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Python notebook checkpoints
+.ipynb_checkpoints/
+
+# Large datasets and artifacts
+datasets/
+archive.zip
+*.pth
+*.pt
+*.ckpt
+
+# Keep frontend/backend source only
+node_modules/
+dist/
