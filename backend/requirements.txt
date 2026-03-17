@@ -4,3 +4,10 @@ torch
 torchvision
 pillow
 python-multipart
+sqlalchemy[asyncio]
+asyncmy
+pydantic-settings
+pydantic[email]
+python-jose[cryptography]
+bcrypt
+aiofiles

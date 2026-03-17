@@ -1,49 +1,51 @@
-# ResNet API + Vue 前端
+# 植物病害识别系统
 
-本目录已提供：
+基于 ResNet50 的植物病害识别系统，前后端分离架构。
 
-- `backend/app.py`：FastAPI 推理服务
-- `frontend/index.html`：Vue3 前端页面（上传图片调用 `/predict`）
+## 技术栈
 
-## 1) 启动后端 API
+- **后端**: FastAPI + SQLAlchemy 2.0 (async) + MySQL + JWT
+- **前端**: Vue3 + Vite + TypeScript + Element Plus + Pinia
+- **模型**: ResNet50 (38类植物病害分类)
 
-在 `ResNet` 目录执行：
+## 快速启动
 
-```bash
-cd /data/clj/Project/ProgrammingStudy/ResNet
-python -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
-```
-
-默认会加载：
-
-- 模型：`resnet50_阶段二_(全局微调)_best.pth`
-- 类别目录：`datasets/color`
-
-也可以通过环境变量覆盖：
+### 1. 数据库
 
 ```bash
-MODEL_PATH="/your/model.pth" DATASET_DIR="/your/dataset_dir" uvicorn backend.app:app --reload
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS plant_disease DEFAULT CHARSET utf8mb4;"
 ```
 
-## 2) 打开前端页面
-
-建议用一个静态服务器打开（避免本地文件跨域限制）：
+### 2. 后端
 
 ```bash
-cd /data/clj/Project/ProgrammingStudy/ResNet/frontend
-python -m http.server 5173
+cd backend
+cp .env.example .env           # 编辑 .env 填写数据库密码
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
 
-然后浏览器访问：
+### 3. 前端
 
-- `http://127.0.0.1:5173`
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## 3) 接口说明
+打开 http://localhost:5173 → 注册 → 登录 → 上传图片识别
 
-- `GET /health`：查看服务状态
-- `GET /classes`：返回类别列表
-- `POST /predict?top_k=5`：上传图片预测
-  - 表单字段：`file`（图片文件）
+## API 接口
+
+| 方法 | 路径 | 认证 | 说明 |
+|------|------|------|------|
+| POST | /api/auth/register | 否 | 注册 |
+| POST | /api/auth/login | 否 | 登录 |
+| GET | /api/auth/me | 是 | 当前用户 |
+| POST | /api/predict | 是 | 单张识别 |
+| POST | /api/predict/batch | 是 | 批量识别 |
+| GET | /api/history | 是 | 识别历史 |
+| DELETE | /api/history/{id} | 是 | 删除记录 |
+| GET | /api/dataset/categories | 否 | 类别列表 |
+| GET | /api/dataset/categories/{name}/images | 否 | 类别图片 |
+| GET | /api/health | 否 | 健康检查 |

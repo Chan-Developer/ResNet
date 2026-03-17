@@ -1,17 +1,42 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
 
-# Python notebook checkpoints
-.ipynb_checkpoints/
+# Node
+node_modules/
+frontend/dist/
 
-# Large datasets and artifacts
+# Env
+.env
+backend/.env
+
+# Uploads
+uploads/
+
+# Datasets
 datasets/
-archive.zip
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large files
 *.pth
 *.pt
 *.ckpt
+archive.zip
 
-# Keep frontend/backend source only
-node_modules/
-dist/
+# Jupyter
+.ipynb_checkpoints/
+
+# Auto-generated
+frontend/src/auto-imports.d.ts
+frontend/src/components.d.ts

@@ -1,0 +1,77 @@
+from pathlib import Path
+from typing import List
+
+import torch
+import torch.nn as nn
+from PIL import Image
+from torchvision import models, transforms
+
+from ..config import settings
+from ..schemas.prediction import PredictionItem, PredictResponse
+
+
+class ModelService:
+    def __init__(self) -> None:
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.class_names: List[str] = []
+        self.model: nn.Module | None = None
+        self.preprocess = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+    def load(self) -> None:
+        dataset_dir = settings.dataset_dir
+        if not dataset_dir.exists():
+            raise FileNotFoundError(f"数据集目录不存在: {dataset_dir}")
+        self.class_names = sorted([p.name for p in dataset_dir.iterdir() if p.is_dir()])
+        if not self.class_names:
+            raise ValueError(f"数据集目录下未找到类别子目录: {dataset_dir}")
+
+        model_path = settings.model_path
+        if not model_path.exists():
+            raise FileNotFoundError(f"模型权重文件不存在: {model_path}")
+
+        model = models.resnet50(weights=None)
+        in_features = model.fc.in_features
+        model.fc = nn.Sequential(nn.Dropout(0.5), nn.Linear(in_features, len(self.class_names)))
+
+        state_dict = torch.load(model_path, map_location=self.device)
+        model.load_state_dict(state_dict)
+        model.to(self.device)
+        model.eval()
+        self.model = model
+
+    def predict(self, image: Image.Image, top_k: int = 5) -> PredictResponse:
+        if self.model is None or not self.class_names:
+            raise RuntimeError("模型尚未加载，请检查模型权重与数据集目录")
+        input_tensor = self.preprocess(image).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            logits = self.model(input_tensor)
+            probs = torch.softmax(logits, dim=1)
+
+        top_k = min(top_k, len(self.class_names))
+        values, indices = torch.topk(probs, k=top_k, dim=1)
+
+        predictions: List[PredictionItem] = []
+        for score, idx in zip(values[0].tolist(), indices[0].tolist()):
+            predictions.append(PredictionItem(
+                class_index=idx,
+                class_name=self.class_names[idx],
+                display_name=self.class_names[idx].replace("___", " - ").replace("_", " "),
+                confidence=round(score, 6),
+            ))
+
+        return PredictResponse(
+            top_k=top_k,
+            predictions=predictions,
+            best_prediction=predictions[0] if predictions else None,
+        )
+
+    def predict_batch(self, images: List[Image.Image], top_k: int = 5) -> List[PredictResponse]:
+        return [self.predict(img, top_k) for img in images]
+
+
+model_service = ModelService()
