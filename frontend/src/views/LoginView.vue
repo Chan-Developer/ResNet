@@ -124,7 +124,7 @@ async function handleLogin() {
     const res: any = await login(payload)
     userStore.setToken(res.data.access_token)
     await userStore.fetchUser()
-    router.push('/predict')
+    router.push('/dashboard')
     ElMessage.success('登录成功')
   } catch { /* handled by interceptor */ } finally {
     loading.value = false

@@ -2,7 +2,7 @@
   <div class="history-page">
     <!-- 页面标题 -->
     <div class="page-header">
-      <div class="header-icon">记录</div>
+      <div class="header-icon">🕘</div>
       <div>
         <h2>识别历史</h2>
         <p class="header-desc">查看你所有的植物病害识别记录</p>
@@ -12,7 +12,7 @@
     <!-- 历史卡片列表 -->
     <div v-loading="loading" class="history-list">
       <div v-if="records.length === 0 && !loading" class="empty-state">
-        <div class="empty-icon">·</div>
+        <div class="empty-icon">🍀</div>
         <p>还没有识别记录哦~</p>
         <p class="empty-hint">去「病害识别」页面上传图片试试吧</p>
       </div>
@@ -39,7 +39,7 @@
             <ConfidenceBar :value="record.top1_confidence" />
           </div>
         </div>
-        <div class="card-action">
+        <div v-if="canDeleteHistory" class="card-action">
           <el-popconfirm title="确定要删除这条记录吗？" confirm-button-text="删除" cancel-button-text="取消" @confirm="handleDelete(record.id)">
             <template #reference>
               <button class="delete-btn" title="删除">
@@ -65,16 +65,19 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import ConfidenceBar from '../components/ConfidenceBar.vue'
 import { getHistory, deleteHistory } from '../api/history'
+import { useUserStore } from '../stores/user'
 
+const userStore = useUserStore()
 const loading = ref(false)
 const records = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = 20
+const canDeleteHistory = computed(() => userStore.hasPermission('history:delete'))
 
 function formatName(name: string) {
   return name?.replace(/___/g, ' - ').replace(/_/g, ' ') || ''
@@ -102,10 +105,14 @@ async function fetchData() {
 }
 
 async function handleDelete(id: number) {
+  if (!canDeleteHistory.value) return
   try {
     await deleteHistory(id)
     ElMessage.success('已删除')
-    fetchData()
+    if (records.value.length === 1 && page.value > 1) {
+      page.value -= 1
+    }
+    await fetchData()
   } catch { /* interceptor */ }
 }
 

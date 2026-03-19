@@ -18,6 +18,14 @@ export function predictBatch(files: File[], topK = 5) {
   return request.post(`/predict/batch?top_k=${topK}`, form)
 }
 
-export function confirmDiagnosis(data: { draft_token: string; confirmed_label?: string }) {
+export function confirmDiagnosis(data: {
+  draft_token: string
+  confirmed_label?: string
+  province?: string
+  city?: string
+  district?: string
+  lat?: number
+  lng?: number
+}) {
   return request.post('/case/confirm', data)
 }

@@ -58,6 +58,11 @@ class DiagnosisDraftOut(BaseModel):
 class ConfirmDiagnosisIn(BaseModel):
     draft_token: str
     confirmed_label: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class CaseOut(BaseModel):
@@ -74,6 +79,12 @@ class CaseOut(BaseModel):
     health_status: str
     confidence: float
     status: str
+    province: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    region_code: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
     advice: AdviceOut
     evidence: List[EvidenceItem]
     created_at: Optional[datetime] = None

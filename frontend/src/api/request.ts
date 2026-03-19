@@ -51,6 +51,18 @@ function extractErrorMessage(payload: unknown): string | null {
   return null
 }
 
+function normalizeRequestPath(url: unknown): string {
+  if (typeof url !== 'string' || !url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      return new URL(url).pathname
+    } catch {
+      return url
+    }
+  }
+  return url
+}
+
 request.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
@@ -74,9 +86,19 @@ request.interceptors.response.use(
       || err.message
       || '网络错误'
     if (err.response?.status === 401) {
-      localStorage.removeItem('token')
-      router.push('/login')
-      ElMessage.warning('登录已过期，请重新登录')
+      const requestPath = normalizeRequestPath(err.config?.url)
+      const isCredentialRequest = requestPath.endsWith('/auth/login') || requestPath.endsWith('/auth/register')
+      const hasToken = !!localStorage.getItem('token')
+
+      if (isCredentialRequest || !hasToken) {
+        ElMessage.error(message || '登录失败')
+      } else {
+        localStorage.removeItem('token')
+        if (router.currentRoute.value.path !== '/login') {
+          router.push('/login')
+        }
+        ElMessage.warning('登录已过期，请重新登录')
+      }
     } else {
       ElMessage.error(message)
     }

@@ -7,8 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import AsyncSessionLocal, engine
 from .models.user import Base
-from .routers import auth, case, dataset, health, history, predict
-from .services import knowledge_service
+from .routers import admin, alert, auth, case, dataset, health, history, predict, report
+from .services import bootstrap_service, knowledge_service
 from .services.model_service import model_service
 
 
@@ -18,6 +18,7 @@ async def lifespan(app: FastAPI):
     # 建表
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(bootstrap_service.ensure_runtime_schema)
     # 加载模型
     model_service.load()
     # 确保上传目录存在
@@ -25,6 +26,8 @@ async def lifespan(app: FastAPI):
     (settings.upload_dir / "drafts").mkdir(parents=True, exist_ok=True)
     # 初始化知识库
     async with AsyncSessionLocal() as session:
+        await bootstrap_service.ensure_admin_account(session)
+        await bootstrap_service.ensure_role_permissions(session)
         await knowledge_service.bootstrap_knowledge(session, model_service.class_names)
     yield
     # --- shutdown ---
@@ -56,8 +59,11 @@ app.mount(
 
 # 路由
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(predict.router)
 app.include_router(case.router)
 app.include_router(history.router)
 app.include_router(dataset.router)
+app.include_router(report.router)
+app.include_router(alert.router)
 app.include_router(health.router)

@@ -1,8 +1,8 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.user import User
+from ..models.user import ROLE_ADMIN, ROLE_USER, User
 from ..schemas.user import UserCreate
 from ..utils.security import hash_password, verify_password
 
@@ -22,11 +22,17 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
     return result.scalar_one_or_none()
 
 
+async def count_users(db: AsyncSession) -> int:
+    return int(await db.scalar(select(func.count()).select_from(User)) or 0)
+
+
 async def create_user(db: AsyncSession, data: UserCreate) -> User:
+    role = ROLE_ADMIN if await count_users(db) == 0 else ROLE_USER
     user = User(
         username=data.username,
         email=data.email,
         hashed_password=hash_password(data.password),
+        role=role,
     )
     db.add(user)
     try:

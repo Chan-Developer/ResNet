@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..dependencies import get_current_user, get_db
+from ..dependencies import get_db, require_permissions
 from ..schemas.common import ApiResponse, PageData
 from ..schemas.prediction import HistoryOut
 from ..services import history_service
@@ -16,7 +16,7 @@ async def list_history(
     page: int = 1,
     size: int = 20,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_permissions("history:view")),
 ):
     if page < 1:
         raise bad_request("page 必须大于等于 1")
@@ -30,7 +30,7 @@ async def list_history(
 async def delete_history(
     record_id: int,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_permissions("history:delete")),
 ):
     ok = await history_service.delete_record(db, record_id, user.id)
     if not ok:

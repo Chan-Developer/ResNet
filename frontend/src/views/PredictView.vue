@@ -17,18 +17,26 @@
         @click="mode = 'single'"
       >
         <span>单张识别</span>
+        <small>适合深度诊断</small>
       </button>
       <button
+        v-if="canBatch"
         class="mode-btn"
         :class="{ active: mode === 'batch' }"
         @click="mode = 'batch'"
       >
         <span>批量识别</span>
+        <small>适合快速筛查</small>
       </button>
     </div>
 
+    <div class="mode-tip">
+      <span class="tip-chip">{{ mode === 'single' ? '智能诊断模式' : '批量筛查模式' }}</span>
+      <span class="tip-text">当前已选择 {{ files.length }} 张图片</span>
+    </div>
+
     <!-- 上传区域 -->
-    <ImageUploader :multiple="mode === 'batch'" :limit="10" @change="onFilesChange" />
+    <ImageUploader :key="uploaderKey" :multiple="mode === 'batch'" :limit="10" @change="onFilesChange" />
 
     <!-- 操作栏 -->
     <div class="actions-bar">
@@ -121,27 +129,50 @@
 
         <div class="insight-card">
           <h4>确认建档</h4>
-          <p class="confirm-hint">
+          <p v-if="canConfirmDiagnosis" class="confirm-hint">
             只有点击确认后，诊断结果才会写入数据库并进入病例库。
           </p>
-          <label class="confirm-label">确认标签</label>
-          <select v-model="confirmedLabel" class="confirm-select">
-            <option
-              v-for="item in draft.predictions"
-              :key="item.class_name"
-              :value="item.class_name"
+          <template v-if="canConfirmDiagnosis">
+            <label class="confirm-label">确认标签</label>
+            <select v-model="confirmedLabel" class="confirm-select">
+              <option
+                v-for="item in draft.predictions"
+                :key="item.class_name"
+                :value="item.class_name"
+              >
+                {{ item.display_name }} · {{ formatPercent(item.confidence) }}
+              </option>
+            </select>
+            <label class="confirm-label">区域信息（可选）</label>
+            <div class="location-grid">
+              <input v-model="locationForm.province" class="location-input" placeholder="省份" />
+              <input v-model="locationForm.city" class="location-input" placeholder="城市" />
+              <input v-model="locationForm.district" class="location-input" placeholder="区县" />
+              <input
+                v-model="locationForm.lat"
+                class="location-input"
+                placeholder="纬度（可选）"
+                inputmode="decimal"
+              />
+              <input
+                v-model="locationForm.lng"
+                class="location-input"
+                placeholder="经度（可选）"
+                inputmode="decimal"
+              />
+            </div>
+            <button
+              class="predict-btn confirm-btn"
+              :disabled="confirmLoading"
+              @click="handleConfirmDiagnosis"
             >
-              {{ item.display_name }} · {{ formatPercent(item.confidence) }}
-            </option>
-          </select>
-          <button
-            class="predict-btn confirm-btn"
-            :disabled="confirmLoading"
-            @click="handleConfirmDiagnosis"
-          >
-            <span v-if="confirmLoading" class="spinner"></span>
-            {{ confirmLoading ? '建档中...' : '确认并建档' }}
-          </button>
+              <span v-if="confirmLoading" class="spinner"></span>
+              {{ confirmLoading ? '建档中...' : '确认并建档' }}
+            </button>
+          </template>
+          <p v-else class="confirm-hint">
+            当前角色不具备“确认建档”权限，请联系管理员开通。
+          </p>
 
           <div v-if="confirmedCase" class="confirm-success">
             <div class="success-title">病例已建档 #{{ confirmedCase.case.id }}</div>
@@ -169,19 +200,21 @@
 
     <!-- 空状态 -->
     <div v-if="!results.length && !draft && !loading" class="empty-state">
-      <div class="empty-icon">·</div>
+      <div class="empty-icon">🍃</div>
       <p>上传植物照片开始识别吧~</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import ImageUploader from '../components/ImageUploader.vue'
 import PredictionCard from '../components/PredictionCard.vue'
 import { diagnoseSingle, predictBatch, confirmDiagnosis } from '../api/predict'
+import { useUserStore } from '../stores/user'
 
+const userStore = useUserStore()
 const mode = ref<'single' | 'batch'>('single')
 const topK = ref(5)
 const maxTopK = 20
@@ -193,33 +226,66 @@ const results = ref<any[]>([])
 const draft = ref<any | null>(null)
 const confirmedLabel = ref('')
 const confirmedCase = ref<any | null>(null)
+const locationForm = reactive({
+  province: '',
+  city: '',
+  district: '',
+  lat: '',
+  lng: '',
+})
+const uploaderKey = ref(0)
+const canBatch = computed(() => userStore.hasPermission('predict:batch'))
+const canConfirmDiagnosis = computed(() => userStore.hasPermission('diagnosis:confirm'))
 
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(1)}%`
+}
+
+function resetPredictState() {
+  results.value = []
+  draft.value = null
+  confirmedLabel.value = ''
+  confirmedCase.value = null
+  locationForm.province = ''
+  locationForm.city = ''
+  locationForm.district = ''
+  locationForm.lat = ''
+  locationForm.lng = ''
+}
+
+function toOptionalText(value: string) {
+  const text = value.trim()
+  return text || undefined
+}
+
+function toOptionalNumber(value: string) {
+  const text = value.trim()
+  if (!text) return undefined
+  const parsed = Number(text)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function onFilesChange(newFiles: File[]) {
   previewUrls.value.forEach((u) => URL.revokeObjectURL(u))
   files.value = newFiles
   previewUrls.value = newFiles.map((f) => URL.createObjectURL(f))
-  results.value = []
-  draft.value = null
-  confirmedLabel.value = ''
-  confirmedCase.value = null
+  resetPredictState()
 }
 
 async function handlePredict() {
   if (!files.value.length) return
   loading.value = true
-  results.value = []
-  draft.value = null
-  confirmedCase.value = null
+  resetPredictState()
   try {
     if (mode.value === 'single') {
       const res: any = await diagnoseSingle(files.value[0], topK.value)
       draft.value = res.data
       confirmedLabel.value = res.data.best_prediction?.class_name || ''
     } else {
+      if (!canBatch.value) {
+        ElMessage.warning('当前角色无批量识别权限')
+        return
+      }
       const res: any = await predictBatch(files.value, topK.value)
       results.value = res.data
     }
@@ -231,12 +297,21 @@ async function handlePredict() {
 }
 
 async function handleConfirmDiagnosis() {
+  if (!canConfirmDiagnosis.value) {
+    ElMessage.warning('当前角色无确认建档权限')
+    return
+  }
   if (!draft.value?.draft_token) return
   confirmLoading.value = true
   try {
     const res: any = await confirmDiagnosis({
       draft_token: draft.value.draft_token,
       confirmed_label: confirmedLabel.value,
+      province: toOptionalText(locationForm.province),
+      city: toOptionalText(locationForm.city),
+      district: toOptionalText(locationForm.district),
+      lat: toOptionalNumber(locationForm.lat),
+      lng: toOptionalNumber(locationForm.lng),
     })
     confirmedCase.value = res.data
     ElMessage.success('病例已建档')
@@ -246,6 +321,20 @@ async function handleConfirmDiagnosis() {
     confirmLoading.value = false
   }
 }
+
+watch(mode, () => {
+  previewUrls.value.forEach((u) => URL.revokeObjectURL(u))
+  files.value = []
+  previewUrls.value = []
+  resetPredictState()
+  uploaderKey.value += 1
+})
+
+watch(canBatch, (enabled) => {
+  if (!enabled && mode.value === 'batch') {
+    mode.value = 'single'
+  }
+})
 
 onBeforeUnmount(() => {
   previewUrls.value.forEach((u) => URL.revokeObjectURL(u))
@@ -298,13 +387,16 @@ onBeforeUnmount(() => {
 .mode-switch {
   display: flex;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 .mode-btn {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: center;
+  flex-direction: column;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 12px 18px;
+  min-width: 160px;
   border: 1.5px solid #e8d8df;
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.6);
@@ -314,6 +406,11 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: all 0.25s;
   font-family: inherit;
+}
+.mode-btn small {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 .mode-btn:hover {
   border-color: var(--pink);
@@ -325,6 +422,32 @@ onBeforeUnmount(() => {
   color: var(--pink-deep);
   box-shadow: 0 2px 12px rgba(178, 106, 127, 0.14);
 }
+.mode-btn.active small {
+  color: var(--pink-deep);
+}
+
+.mode-tip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.tip-chip {
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--green-light), var(--sky-light));
+  color: var(--green-deep);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.tip-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
 
 /* Actions */
 .actions-bar {
@@ -333,6 +456,10 @@ onBeforeUnmount(() => {
   gap: 16px;
   margin: 20px 0 28px;
   flex-wrap: wrap;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(232, 216, 223, 0.78);
 }
 .topk-field {
   display: flex;
@@ -589,6 +716,28 @@ onBeforeUnmount(() => {
   border-color: var(--pink);
 }
 
+.location-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.location-input {
+  border: 1.5px solid #e8d8df;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.9);
+  outline: none;
+  font-family: inherit;
+}
+
+.location-input:focus {
+  border-color: var(--pink);
+}
+
 .confirm-btn {
   margin-top: 16px;
   width: 100%;
@@ -636,6 +785,9 @@ onBeforeUnmount(() => {
     align-items: stretch;
   }
   .result-grid {
+    grid-template-columns: 1fr;
+  }
+  .location-grid {
     grid-template-columns: 1fr;
   }
 }

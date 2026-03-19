@@ -16,7 +16,7 @@
         :key="item.path"
         :to="item.path"
         class="nav-item"
-        :class="{ active: route.path === item.path }"
+        :class="{ active: isRouteActive(item.path) }"
       >
         <span class="nav-icon">{{ item.icon }}</span>
         <span class="nav-label">{{ item.label }}</span>
@@ -29,7 +29,7 @@
         <div class="avatar">{{ userStore.userInfo.username.charAt(0).toUpperCase() }}</div>
         <div class="user-meta">
           <span class="user-name">{{ userStore.userInfo.username }}</span>
-          <span class="user-role">Plant Lover</span>
+          <span class="user-role">{{ roleLabel }}</span>
         </div>
       </div>
       <button class="logout-btn" @click="userStore.logout()">
@@ -40,17 +40,49 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()
 const userStore = useUserStore()
 
-const navItems = [
-  { path: '/predict', icon: 'AI', label: '病害识别' },
-  { path: '/history', icon: '记录', label: '识别历史' },
-  { path: '/dataset', icon: '库', label: '数据集浏览' },
-]
+const navItems = computed(() => {
+  const baseItems: Array<{ path: string; icon: string; label: string }> = []
+  baseItems.push({ path: '/dashboard', icon: '📊', label: '数据看板' })
+  const isAdminRole = userStore.isAdmin
+  if (userStore.hasPermission('predict:single')) {
+    baseItems.push({ path: '/predict', icon: '🌿', label: '病害识别' })
+  }
+  if (userStore.hasPermission('history:view')) {
+    baseItems.push({ path: '/history', icon: '🕘', label: '识别历史' })
+  }
+  if (userStore.hasPermission('dataset:view')) {
+    baseItems.push({ path: '/dataset', icon: '🗂️', label: '数据集浏览' })
+  }
+  if (isAdminRole || userStore.hasPermission('admin:user')) {
+    baseItems.push({ path: '/admin/users', icon: '👥', label: '用户管理' })
+  }
+  if (isAdminRole || userStore.hasPermission('admin:role')) {
+    baseItems.push({ path: '/admin/roles', icon: '🛡️', label: '角色权限' })
+  }
+  if (isAdminRole || userStore.hasPermission('admin:alert')) {
+    baseItems.push({ path: '/admin/alerts', icon: '🚨', label: '区域预警' })
+  }
+  return baseItems
+})
+
+function isRouteActive(path: string) {
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+
+const roleLabel = computed(() => (
+  userStore.currentRole === 'admin'
+    ? '系统管理员'
+    : userStore.currentRole === 'expert'
+      ? '专家用户'
+      : '诊断用户'
+))
 </script>
 
 <style scoped>
@@ -110,6 +142,7 @@ const navItems = [
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow-y: auto;
 }
 .nav-item {
   display: flex;
@@ -124,6 +157,19 @@ const navItems = [
   transition: all 0.25s ease;
   position: relative;
   overflow: hidden;
+}
+.nav-item::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--pink-deep);
+  transform: translateY(-50%) scaleY(0.4);
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
 }
 .nav-item::before {
   content: '';
@@ -140,6 +186,10 @@ const navItems = [
 .nav-item.active::before {
   opacity: 1;
 }
+.nav-item.active::after {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
 .nav-item:hover,
 .nav-item.active {
   color: var(--pink-deep);
@@ -149,13 +199,17 @@ const navItems = [
   box-shadow: 0 2px 12px rgba(178, 106, 127, 0.14);
 }
 .nav-icon {
-  font-size: 12px;
-  padding: 4px 6px;
+  font-size: 13px;
+  width: 22px;
+  height: 22px;
   border-radius: 8px;
   background: var(--lavender-light);
   color: var(--text-secondary);
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .nav-item.active .nav-icon {
   background: var(--pink-light);

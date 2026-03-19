@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { UploadFile, UploadFiles } from 'element-plus'
 
@@ -44,6 +44,23 @@ const emit = defineEmits<{
 }>()
 
 const fileList = ref<UploadFile[]>([])
+
+watch(
+  () => [props.multiple, props.limit],
+  () => {
+    let nextFiles = fileList.value
+    if (!props.multiple) {
+      nextFiles = nextFiles.slice(-1)
+    }
+    if (nextFiles.length > props.limit) {
+      nextFiles = nextFiles.slice(-props.limit)
+    }
+    if (nextFiles.length !== fileList.value.length) {
+      fileList.value = nextFiles
+      emitFiles()
+    }
+  },
+)
 
 function handleChange(_file: UploadFile, files: UploadFiles) {
   if (!props.multiple) {
@@ -75,6 +92,29 @@ function emitFiles() {
 .uploader-wrap {
   margin-bottom: 8px;
 }
+
+.cute-upload {
+  width: 100%;
+}
+
+.cute-upload :deep(.el-upload--picture-card) {
+  width: 100%;
+  height: 168px;
+  border-radius: var(--radius-md);
+}
+
+.cute-upload :deep(.el-upload-dragger) {
+  border: 1.5px dashed #e6d7de;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(250, 244, 247, 0.7));
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.cute-upload :deep(.el-upload-dragger:hover) {
+  border-color: var(--pink);
+  background: linear-gradient(135deg, var(--pink-light), var(--lavender-light));
+}
+
 .upload-inner {
   display: flex;
   flex-direction: column;

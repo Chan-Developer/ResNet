@@ -13,7 +13,7 @@ from ..schemas.diagnosis import (
     SimilarCaseOut,
 )
 from ..schemas.prediction import PredictionItem
-from ..services import advice_service, knowledge_service
+from ..services import advice_service, alert_service, knowledge_service
 from ..utils.class_names import to_display_name
 from ..utils.errors import bad_request, not_found, unauthorized
 from ..utils.label_parser import parse_label
@@ -94,6 +94,12 @@ def _case_to_schema(case: DiseaseCase) -> CaseOut:
         health_status=case.health_status,
         confidence=case.confidence,
         status=case.status,
+        province=case.province,
+        city=case.city,
+        district=case.district,
+        region_code=case.region_code,
+        lat=case.lat,
+        lng=case.lng,
         advice=case.advice_json,
         evidence=[EvidenceItem.model_validate(item) for item in case.evidence_json],
         created_at=case.created_at,
@@ -159,6 +165,11 @@ async def create_case_from_draft(
     user_id: int,
     draft_token: str,
     confirmed_label: str | None,
+    province: str | None = None,
+    city: str | None = None,
+    district: str | None = None,
+    lat: float | None = None,
+    lng: float | None = None,
 ) -> tuple[CaseOut, list[SimilarCaseOut]]:
     payload = decode_draft_token(draft_token, user_id)
     selected_prediction = _prediction_from_payload(payload, confirmed_label)
@@ -192,6 +203,15 @@ async def create_case_from_draft(
         db.add(prediction_record)
         await db.flush()
 
+        normalized_province = alert_service.normalize_region_text(province)
+        normalized_city = alert_service.normalize_region_text(city)
+        normalized_district = alert_service.normalize_region_text(district)
+        region_code = alert_service.build_region_code(
+            normalized_province,
+            normalized_city,
+            normalized_district,
+        )
+
         case = DiseaseCase(
             user_id=user_id,
             prediction_record_id=prediction_record.id,
@@ -204,6 +224,12 @@ async def create_case_from_draft(
             health_status=selected_profile.health_status,
             confidence=selected_prediction.confidence,
             status="confirmed",
+            province=normalized_province,
+            city=normalized_city,
+            district=normalized_district,
+            region_code=region_code,
+            lat=lat,
+            lng=lng,
             diagnostic_summary=advice.summary,
             advice_json=advice.model_dump(),
             evidence_json=[item.model_dump() for item in knowledge_evidence],
@@ -216,6 +242,11 @@ async def create_case_from_draft(
         if promoted_path is not None:
             promoted_path.unlink(missing_ok=True)
         raise
+
+    try:
+        await alert_service.evaluate_case_region_alert(db, case=case)
+    except Exception:
+        await db.rollback()
 
     refreshed_similar = await search_similar_cases(
         db,

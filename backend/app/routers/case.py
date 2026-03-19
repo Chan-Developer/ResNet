@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..dependencies import get_current_user, get_db
+from ..dependencies import get_db, require_permissions
 from ..schemas.common import ApiResponse
 from ..schemas.diagnosis import CaseConfirmOut, CaseOut, ConfirmDiagnosisIn, SimilarCaseOut
 from ..services import case_service
@@ -13,13 +13,18 @@ router = APIRouter(prefix="/api/case", tags=["case"])
 async def confirm_case(
     data: ConfirmDiagnosisIn,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_permissions("diagnosis:confirm")),
 ):
     case, similar_cases = await case_service.create_case_from_draft(
         db,
         user_id=user.id,
         draft_token=data.draft_token,
         confirmed_label=data.confirmed_label,
+        province=data.province,
+        city=data.city,
+        district=data.district,
+        lat=data.lat,
+        lng=data.lng,
     )
     return ApiResponse(data=CaseConfirmOut(case=case, similar_cases=similar_cases))
 
@@ -28,7 +33,7 @@ async def confirm_case(
 async def get_case_detail(
     case_id: int,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_permissions("history:view")),
 ):
     case = await case_service.get_case(db, case_id, user.id)
     return ApiResponse(data=case)
@@ -38,7 +43,7 @@ async def get_case_detail(
 async def get_similar_cases(
     case_id: int,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_permissions("history:view")),
 ):
     case = await case_service.get_case(db, case_id, user.id)
     similar_cases = await case_service.search_similar_cases(

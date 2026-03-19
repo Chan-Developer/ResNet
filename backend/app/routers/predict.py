@@ -10,7 +10,7 @@ from PIL import Image, UnidentifiedImageError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..dependencies import get_current_user, get_db, get_model_service
+from ..dependencies import get_db, get_model_service, require_permissions
 from ..schemas.common import ApiResponse
 from ..schemas.diagnosis import DiagnosisDraftOut
 from ..schemas.prediction import PredictResponse
@@ -129,7 +129,7 @@ async def diagnose_single(
     file: UploadFile = File(...),
     top_k: int = settings.TOP_K,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_permissions("predict:single")),
     svc: ModelService = Depends(get_model_service),
 ):
     _cleanup_expired_draft_uploads()
@@ -187,7 +187,7 @@ async def predict_single(
     file: UploadFile = File(...),
     top_k: int = settings.TOP_K,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_permissions("predict:single")),
     svc: ModelService = Depends(get_model_service),
 ):
     top_k = _validate_top_k(top_k)
@@ -218,7 +218,7 @@ async def predict_batch(
     files: List[UploadFile] = File(...),
     top_k: int = settings.TOP_K,
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_permissions("predict:batch")),
     svc: ModelService = Depends(get_model_service),
 ):
     top_k = _validate_top_k(top_k)
