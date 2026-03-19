@@ -65,6 +65,11 @@ def _prediction_from_payload(payload: dict, confirmed_label: str | None) -> Pred
 def _promote_image(image_filename: str, image_url: str) -> tuple[str, str]:
     source_path = settings.upload_dir / image_filename
     if not source_path.exists():
+        image_path = Path(image_filename)
+        if image_path.parts and image_path.parts[0] == "drafts":
+            promoted_candidate = settings.upload_dir / image_path.name
+            if promoted_candidate.exists():
+                raise bad_request("该诊断草稿已完成建档，请勿重复提交")
         raise bad_request("诊断图片已过期或不存在，请重新上传")
     image_path = Path(image_filename)
     if image_path.parts and image_path.parts[0] == "drafts":

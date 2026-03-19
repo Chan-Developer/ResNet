@@ -20,11 +20,11 @@
         <label class="field-label">关联病例 ID（可选）</label>
         <input v-model="createForm.caseIdText" class="field-input" placeholder="例如：1024" />
 
-        <label class="field-label">目标标签（可选，关联病例时可不填）</label>
+        <label class="field-label">目标标签（可选）</label>
         <input
           v-model="createForm.targetLabel"
           class="field-input"
-          placeholder="例如：Tomato___Late_blight"
+          placeholder="不填则自动使用最近一次建档病例标签"
         />
 
         <label class="field-label">复查频率（天）</label>
@@ -306,8 +306,8 @@ function selectPlan(planId: number) {
 async function handleCreatePlan() {
   const caseIdText = createForm.caseIdText.trim()
   const caseId = caseIdText ? Number(caseIdText) : undefined
-  if (!createForm.targetLabel.trim() && !caseId) {
-    ElMessage.warning('请填写目标标签或关联病例ID')
+  if (caseIdText && !Number.isFinite(caseId)) {
+    ElMessage.warning('病例ID必须是数字')
     return
   }
   creatingPlan.value = true

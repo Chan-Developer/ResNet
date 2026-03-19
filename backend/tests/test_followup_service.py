@@ -93,6 +93,38 @@ class FollowupServiceTestCase(unittest.IsolatedAsyncioTestCase):
                     payload=FollowUpPlanCreateIn(frequency_days=7),
                 )
 
+    async def test_create_plan_fallback_to_latest_case(self):
+        async with self.Session() as db:
+            older_case = await self._add_case(
+                db,
+                user_id=1,
+                confidence=0.9,
+                label="Tomato___Early_blight",
+            )
+            latest_case = await self._add_case(
+                db,
+                user_id=1,
+                confidence=0.7,
+                label="Tomato___Late_blight",
+            )
+            await self._add_case(
+                db,
+                user_id=2,
+                confidence=0.6,
+                label="Potato___Late_blight",
+            )
+            older_case.created_at = datetime.now() - timedelta(days=5)
+            latest_case.created_at = datetime.now() - timedelta(hours=1)
+            await db.commit()
+
+            plan = await followup_service.create_followup_plan(
+                db,
+                user_id=1,
+                payload=FollowUpPlanCreateIn(frequency_days=7),
+            )
+            self.assertEqual(plan.case_id, latest_case.id)
+            self.assertEqual(plan.target_label, "Tomato___Late_blight")
+
     async def test_create_checkin_updates_effect_and_evaluation(self):
         async with self.Session() as db:
             case = await self._add_case(db, confidence=0.8)

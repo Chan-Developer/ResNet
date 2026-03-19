@@ -163,11 +163,11 @@
             </div>
             <button
               class="predict-btn confirm-btn"
-              :disabled="confirmLoading"
+              :disabled="confirmLoading || !!confirmedCase"
               @click="handleConfirmDiagnosis"
             >
               <span v-if="confirmLoading" class="spinner"></span>
-              {{ confirmLoading ? '建档中...' : '确认并建档' }}
+              {{ confirmLoading ? '建档中...' : confirmedCase ? '已建档' : '确认并建档' }}
             </button>
           </template>
           <p v-else class="confirm-hint">

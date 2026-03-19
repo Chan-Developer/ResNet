@@ -54,11 +54,13 @@
     <!-- 分页 -->
     <div v-if="total > 0" class="pagination-wrap">
       <el-pagination
-        layout="prev, pager, next"
+        layout="total, sizes, prev, pager, next"
         :total="total"
-        :page-size="pageSize"
+        :page-sizes="[10, 20, 50, 100]"
         v-model:current-page="page"
+        v-model:page-size="pageSize"
         @current-change="fetchData"
+        @size-change="handlePageSizeChange"
       />
     </div>
   </div>
@@ -76,7 +78,7 @@ const loading = ref(false)
 const records = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 20
+const pageSize = ref(20)
 const canDeleteHistory = computed(() => userStore.hasPermission('history:delete'))
 
 function formatName(name: string) {
@@ -96,12 +98,18 @@ function formatTime(t: string) {
 async function fetchData() {
   loading.value = true
   try {
-    const res: any = await getHistory(page.value, pageSize)
+    const res: any = await getHistory(page.value, pageSize.value)
     records.value = res.data.items
     total.value = res.data.total
   } catch { /* interceptor */ } finally {
     loading.value = false
   }
+}
+
+function handlePageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
+  fetchData()
 }
 
 async function handleDelete(id: number) {

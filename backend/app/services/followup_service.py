@@ -161,6 +161,16 @@ async def _get_owned_case(
     return case
 
 
+async def _get_latest_user_case(db: AsyncSession, *, user_id: int) -> DiseaseCase | None:
+    result = await db.execute(
+        select(DiseaseCase)
+        .where(DiseaseCase.user_id == user_id)
+        .order_by(DiseaseCase.created_at.desc(), DiseaseCase.id.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def _get_owned_plan(db: AsyncSession, *, user_id: int, plan_id: int) -> FollowUpPlan:
     result = await db.execute(
         select(FollowUpPlan).where(FollowUpPlan.id == plan_id, FollowUpPlan.user_id == user_id)
@@ -239,8 +249,15 @@ async def create_followup_plan(
         case = await _get_owned_case(db, user_id=user_id, case_id=case_id)
         if target_label is None:
             target_label = case.confirmed_label
+    if case is None and target_label is None:
+        latest_case = await _get_latest_user_case(db, user_id=user_id)
+        if latest_case is not None:
+            case = latest_case
+            case_id = latest_case.id
+            target_label = latest_case.confirmed_label
+
     if target_label is None:
-        raise bad_request("请提供目标标签或关联病例")
+        raise bad_request("请先完成一次确认建档，或手动填写目标标签")
 
     start_date = payload.start_date or date.today()
     frequency_days = int(payload.frequency_days)
