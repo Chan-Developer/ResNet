@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..dependencies import get_current_user, get_db
@@ -16,7 +17,14 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="用户名已存在")
     if await auth_service.get_user_by_email(db, data.email):
         raise HTTPException(status_code=400, detail="邮箱已被注册")
-    user = await auth_service.create_user(db, data)
+    try:
+        user = await auth_service.create_user(db, data)
+    except IntegrityError:
+        if await auth_service.get_user_by_username(db, data.username):
+            raise HTTPException(status_code=400, detail="用户名已存在")
+        if await auth_service.get_user_by_email(db, data.email):
+            raise HTTPException(status_code=400, detail="邮箱已被注册")
+        raise HTTPException(status_code=400, detail="注册失败，请重试")
     return ApiResponse(data=UserInfo.model_validate(user))
 
 

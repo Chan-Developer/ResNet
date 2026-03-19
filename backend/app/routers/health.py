@@ -13,5 +13,7 @@ async def health():
         "status": "ok",
         "device": str(model_service.device),
         "model_path": str(settings.model_path),
+        "class_names_source": model_service.class_names_source,
+        "dataset_available": settings.dataset_dir.exists(),
         "num_classes": len(model_service.class_names),
     })

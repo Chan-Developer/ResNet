@@ -25,7 +25,7 @@
         <div class="card-image">
           <el-image
             :src="record.image_url"
-            fit="cover"
+            fit="contain"
             :preview-src-list="[record.image_url]"
             class="thumb"
           />
@@ -180,12 +180,34 @@ onMounted(fetchData)
 
 .card-image {
   flex-shrink: 0;
+  width: 88px;
+  height: 88px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--pink-light), var(--lavender-light));
+  border: 1px solid rgba(220, 210, 218, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 .thumb {
-  width: 60px;
-  height: 60px;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
+.thumb :deep(.el-image__inner) {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.thumb :deep(.el-image__wrapper) {
   border-radius: var(--radius-sm);
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .card-content {
@@ -277,6 +299,10 @@ onMounted(fetchData)
   .history-card {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .card-image {
+    width: 100%;
+    height: 180px;
   }
   .card-top {
     flex-direction: column;

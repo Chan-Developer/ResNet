@@ -28,7 +28,7 @@
       </div>
 
       <!-- 登录表单 -->
-      <form v-if="activeTab === 'login'" @submit.prevent="handleLogin" class="form">
+      <form v-if="activeTab === 'login'" novalidate @submit.prevent="handleLogin" class="form">
         <div class="field">
           <label>用户名</label>
           <div class="input-wrap">
@@ -50,7 +50,7 @@
       </form>
 
       <!-- 注册表单 -->
-      <form v-else @submit.prevent="handleRegister" class="form">
+      <form v-else novalidate @submit.prevent="handleRegister" class="form">
         <div class="field">
           <label>用户名</label>
           <div class="input-wrap">
@@ -62,7 +62,14 @@
           <label>邮箱</label>
           <div class="input-wrap">
             <span class="input-icon">M</span>
-            <input v-model="regForm.email" type="email" placeholder="请输入邮箱" />
+            <input
+              v-model="regForm.email"
+              type="text"
+              inputmode="email"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="请输入邮箱"
+            />
           </div>
         </div>
         <div class="field">
@@ -97,14 +104,24 @@ const loading = ref(false)
 const loginForm = reactive({ username: '', password: '' })
 const regForm = reactive({ username: '', email: '', password: '' })
 
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 async function handleLogin() {
-  if (!loginForm.username || !loginForm.password) {
+  if (loading.value) return
+  const username = loginForm.username.trim()
+  if (!username || !loginForm.password) {
     ElMessage.warning('请填写完整')
     return
   }
   loading.value = true
   try {
-    const res: any = await login(loginForm)
+    const payload = {
+      username,
+      password: loginForm.password,
+    }
+    const res: any = await login(payload)
     userStore.setToken(res.data.access_token)
     await userStore.fetchUser()
     router.push('/predict')
@@ -115,17 +132,29 @@ async function handleLogin() {
 }
 
 async function handleRegister() {
-  if (!regForm.username || !regForm.email || !regForm.password) {
+  if (loading.value) return
+  const username = regForm.username.trim()
+  const email = regForm.email.trim()
+  if (!username || !email || !regForm.password) {
     ElMessage.warning('请填写完整')
+    return
+  }
+  if (!isValidEmail(email)) {
+    ElMessage.warning('请输入正确的邮箱地址')
     return
   }
   loading.value = true
   try {
-    await register(regForm)
+    const payload = {
+      username,
+      email,
+      password: regForm.password,
+    }
+    await register(payload)
     ElMessage.success('注册成功，请登录')
     activeTab.value = 'login'
-    loginForm.username = regForm.username
-    loginForm.password = regForm.password
+    loginForm.username = payload.username
+    loginForm.password = payload.password
   } catch { /* handled by interceptor */ } finally {
     loading.value = false
   }

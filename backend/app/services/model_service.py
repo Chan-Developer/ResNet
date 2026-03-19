@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import List
 
 import torch
@@ -8,12 +7,14 @@ from torchvision import models, transforms
 
 from ..config import settings
 from ..schemas.prediction import PredictionItem, PredictResponse
+from ..utils.class_names import load_class_names, to_display_name
 
 
 class ModelService:
     def __init__(self) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.class_names: List[str] = []
+        self.class_names_source: str = ""
         self.model: nn.Module | None = None
         self.preprocess = transforms.Compose([
             transforms.Resize(256),
@@ -23,12 +24,8 @@ class ModelService:
         ])
 
     def load(self) -> None:
-        dataset_dir = settings.dataset_dir
-        if not dataset_dir.exists():
-            raise FileNotFoundError(f"数据集目录不存在: {dataset_dir}")
-        self.class_names = sorted([p.name for p in dataset_dir.iterdir() if p.is_dir()])
-        if not self.class_names:
-            raise ValueError(f"数据集目录下未找到类别子目录: {dataset_dir}")
+        self.class_names, source_path = load_class_names()
+        self.class_names_source = str(source_path)
 
         model_path = settings.model_path
         if not model_path.exists():
@@ -60,7 +57,7 @@ class ModelService:
             predictions.append(PredictionItem(
                 class_index=idx,
                 class_name=self.class_names[idx],
-                display_name=self.class_names[idx].replace("___", " - ").replace("_", " "),
+                display_name=to_display_name(self.class_names[idx]),
                 confidence=round(score, 6),
             ))
 

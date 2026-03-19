@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # --- 路径 ---
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent  # ResNet/
     MODEL_PATH: Optional[str] = None  # 为空则自动定位
+    CLASS_NAMES_PATH: Optional[str] = None
     DATASET_DIR: Optional[str] = None
     UPLOAD_DIR: Optional[str] = None
 
@@ -27,17 +28,34 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24h
+    DIAGNOSIS_DRAFT_EXPIRE_MINUTES: int = 30
 
     # --- 推理 ---
     TOP_K: int = 5
     MAX_TOP_K: int = 20
     MAX_BATCH_SIZE: int = 10
+    MAX_UPLOAD_SIZE_MB: int = 10
+    MAX_BATCH_TOTAL_SIZE_MB: int = 30
+    UPLOAD_CHUNK_SIZE: int = 1024 * 1024
+    DIAGNOSIS_EVIDENCE_LIMIT: int = 4
+    SIMILAR_CASE_LIMIT: int = 3
+
+    # --- LLM ---
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4.1-mini"
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
     @property
     def model_path(self) -> Path:
         if self.MODEL_PATH:
             return Path(self.MODEL_PATH)
         return self.BASE_DIR / "resnet50_阶段二_(全局微调)_best.pth"
+
+    @property
+    def class_names_path(self) -> Path:
+        if self.CLASS_NAMES_PATH:
+            return Path(self.CLASS_NAMES_PATH)
+        return self.BASE_DIR / "backend" / "app" / "assets" / "class_names.txt"
 
     @property
     def dataset_dir(self) -> Path:
@@ -60,12 +78,21 @@ class Settings(BaseSettings):
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
+    @property
+    def max_batch_total_size_bytes(self) -> int:
+        return self.MAX_BATCH_TOTAL_SIZE_MB * 1024 * 1024
+
     model_config = {
         "env_file": [
             Path(__file__).resolve().parent.parent / ".env",  # backend/.env
             ".env",  # CWD/.env
         ],
         "env_file_encoding": "utf-8",
+        "extra": "ignore",
     }
 
 

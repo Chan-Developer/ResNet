@@ -5,9 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .database import engine
+from .database import AsyncSessionLocal, engine
 from .models.user import Base
-from .routers import auth, dataset, health, history, predict
+from .routers import auth, case, dataset, health, history, predict
+from .services import knowledge_service
 from .services.model_service import model_service
 
 
@@ -21,6 +22,10 @@ async def lifespan(app: FastAPI):
     model_service.load()
     # 确保上传目录存在
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    (settings.upload_dir / "drafts").mkdir(parents=True, exist_ok=True)
+    # 初始化知识库
+    async with AsyncSessionLocal() as session:
+        await knowledge_service.bootstrap_knowledge(session, model_service.class_names)
     yield
     # --- shutdown ---
     await engine.dispose()
@@ -45,13 +50,14 @@ app.mount(
 )
 app.mount(
     "/api/static/datasets",
-    StaticFiles(directory=str(settings.dataset_dir)),
+    StaticFiles(directory=str(settings.dataset_dir), check_dir=False),
     name="datasets",
 )
 
 # 路由
 app.include_router(auth.router)
 app.include_router(predict.router)
+app.include_router(case.router)
 app.include_router(history.router)
 app.include_router(dataset.router)
 app.include_router(health.router)

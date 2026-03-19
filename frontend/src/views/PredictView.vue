@@ -43,6 +43,116 @@
     </div>
 
     <!-- 结果展示 -->
+    <div v-if="draft" class="results-section">
+      <div class="section-title">
+        <h3>诊断草稿</h3>
+        <span class="section-badge">待确认</span>
+      </div>
+      <div class="result-grid">
+        <PredictionCard :result="draft" :image-url="previewUrls[0]" />
+      </div>
+
+      <div class="diagnosis-grid">
+        <div class="insight-card">
+          <div class="meta-row">
+            <span class="meta-chip">{{ draft.crop_name }}</span>
+            <span class="meta-chip" :class="draft.health_status">
+              {{ draft.health_status === 'healthy' ? '健康状态' : '疑似病害' }}
+            </span>
+          </div>
+          <h4>处置建议</h4>
+          <p class="advice-summary">{{ draft.advice.summary }}</p>
+          <p class="advice-overview">{{ draft.advice.condition_overview }}</p>
+          <div class="sub-title">建议动作</div>
+          <ul class="advice-list">
+            <li v-for="(action, idx) in draft.advice.recommended_actions" :key="idx">
+              {{ action }}
+            </li>
+          </ul>
+          <div class="sub-title">不确定性提示</div>
+          <p class="notice-text">{{ draft.advice.uncertainty_notice }}</p>
+          <div class="sub-title">跟进建议</div>
+          <p class="notice-text">{{ draft.advice.follow_up }}</p>
+        </div>
+
+        <div class="insight-card">
+          <h4>知识证据</h4>
+          <div
+            v-for="item in draft.knowledge_evidence"
+            :key="item.evidence_id"
+            class="evidence-item"
+          >
+            <div class="evidence-top">
+              <span class="evidence-id">{{ item.evidence_id }}</span>
+              <span class="evidence-score">{{ formatPercent(item.score) }}</span>
+            </div>
+            <div class="evidence-title">{{ item.title }}</div>
+            <div class="evidence-source">{{ item.source_name }}</div>
+            <p class="evidence-snippet">{{ item.snippet }}</p>
+          </div>
+        </div>
+
+        <div class="insight-card">
+          <h4>相似病例</h4>
+          <div v-if="!draft.similar_cases.length" class="empty-mini">
+            暂无已确认相似病例，将主要依据知识证据给出处置建议。
+          </div>
+          <div
+            v-for="item in draft.similar_cases"
+            :key="item.case_id"
+            class="case-item"
+          >
+            <div class="case-top">
+              <span class="case-label">{{ item.display_name }}</span>
+              <span class="case-score">相似度 {{ formatPercent(item.similarity) }}</span>
+            </div>
+            <p class="case-summary">{{ item.summary }}</p>
+            <div class="case-actions">
+              <span
+                v-for="(action, idx) in item.reference_actions"
+                :key="`${item.case_id}-${idx}`"
+                class="case-action-chip"
+              >
+                {{ action }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="insight-card">
+          <h4>确认建档</h4>
+          <p class="confirm-hint">
+            只有点击确认后，诊断结果才会写入数据库并进入病例库。
+          </p>
+          <label class="confirm-label">确认标签</label>
+          <select v-model="confirmedLabel" class="confirm-select">
+            <option
+              v-for="item in draft.predictions"
+              :key="item.class_name"
+              :value="item.class_name"
+            >
+              {{ item.display_name }} · {{ formatPercent(item.confidence) }}
+            </option>
+          </select>
+          <button
+            class="predict-btn confirm-btn"
+            :disabled="confirmLoading"
+            @click="handleConfirmDiagnosis"
+          >
+            <span v-if="confirmLoading" class="spinner"></span>
+            {{ confirmLoading ? '建档中...' : '确认并建档' }}
+          </button>
+
+          <div v-if="confirmedCase" class="confirm-success">
+            <div class="success-title">病例已建档 #{{ confirmedCase.case.id }}</div>
+            <div class="success-text">
+              已按「{{ confirmedCase.case.confirmed_display_name }}」写入数据库。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="results.length" class="results-section">
       <div class="section-title">
         <h3>识别结果</h3>
@@ -58,7 +168,7 @@
     </div>
 
     <!-- 空状态 -->
-    <div v-if="!results.length && !loading" class="empty-state">
+    <div v-if="!results.length && !draft && !loading" class="empty-state">
       <div class="empty-icon">·</div>
       <p>上传植物照片开始识别吧~</p>
     </div>
@@ -70,31 +180,45 @@ import { onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import ImageUploader from '../components/ImageUploader.vue'
 import PredictionCard from '../components/PredictionCard.vue'
-import { predictSingle, predictBatch } from '../api/predict'
+import { diagnoseSingle, predictBatch, confirmDiagnosis } from '../api/predict'
 
 const mode = ref<'single' | 'batch'>('single')
 const topK = ref(5)
 const maxTopK = 20
 const loading = ref(false)
+const confirmLoading = ref(false)
 const files = ref<File[]>([])
 const previewUrls = ref<string[]>([])
 const results = ref<any[]>([])
+const draft = ref<any | null>(null)
+const confirmedLabel = ref('')
+const confirmedCase = ref<any | null>(null)
+
+function formatPercent(value: number) {
+  return `${(value * 100).toFixed(1)}%`
+}
 
 function onFilesChange(newFiles: File[]) {
   previewUrls.value.forEach((u) => URL.revokeObjectURL(u))
   files.value = newFiles
   previewUrls.value = newFiles.map((f) => URL.createObjectURL(f))
   results.value = []
+  draft.value = null
+  confirmedLabel.value = ''
+  confirmedCase.value = null
 }
 
 async function handlePredict() {
   if (!files.value.length) return
   loading.value = true
   results.value = []
+  draft.value = null
+  confirmedCase.value = null
   try {
     if (mode.value === 'single') {
-      const res: any = await predictSingle(files.value[0], topK.value)
-      results.value = [res.data]
+      const res: any = await diagnoseSingle(files.value[0], topK.value)
+      draft.value = res.data
+      confirmedLabel.value = res.data.best_prediction?.class_name || ''
     } else {
       const res: any = await predictBatch(files.value, topK.value)
       results.value = res.data
@@ -103,6 +227,23 @@ async function handlePredict() {
     ElMessage.error('识别失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function handleConfirmDiagnosis() {
+  if (!draft.value?.draft_token) return
+  confirmLoading.value = true
+  try {
+    const res: any = await confirmDiagnosis({
+      draft_token: draft.value.draft_token,
+      confirmed_label: confirmedLabel.value,
+    })
+    confirmedCase.value = res.data
+    ElMessage.success('病例已建档')
+  } catch {
+    ElMessage.error('建档失败')
+  } finally {
+    confirmLoading.value = false
   }
 }
 
@@ -257,10 +398,215 @@ onBeforeUnmount(() => {
   font-weight: 800;
   color: var(--text-primary);
 }
+.section-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pink-deep);
+  background: var(--pink-light);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
 .result-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 16px;
+}
+
+.diagnosis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.insight-card {
+  background: var(--card-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 18px;
+}
+
+.insight-card h4 {
+  margin: 0 0 14px;
+  font-size: 17px;
+  color: var(--text-primary);
+}
+
+.meta-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.meta-chip {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--lavender-light);
+  color: var(--text-secondary);
+}
+
+.meta-chip.healthy {
+  background: var(--green-light);
+  color: var(--green-deep);
+}
+
+.meta-chip.diseased {
+  background: var(--peach-light);
+  color: #b45309;
+}
+
+.advice-summary {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.advice-overview,
+.notice-text,
+.case-summary,
+.confirm-hint,
+.success-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.sub-title,
+.confirm-label {
+  display: block;
+  margin: 14px 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.advice-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+}
+
+.advice-list li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.evidence-item,
+.case-item {
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(232, 216, 223, 0.8);
+  margin-bottom: 10px;
+}
+
+.evidence-top,
+.case-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.evidence-id,
+.case-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.evidence-score,
+.case-score {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.evidence-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.evidence-source {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.evidence-snippet {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.case-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.case-action-chip {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pink-deep);
+  background: var(--pink-light);
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.empty-mini {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.confirm-select {
+  width: 100%;
+  border: 1.5px solid #e8d8df;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.9);
+  outline: none;
+  font-family: inherit;
+}
+
+.confirm-select:focus {
+  border-color: var(--pink);
+}
+
+.confirm-btn {
+  margin-top: 16px;
+  width: 100%;
+  justify-content: center;
+}
+
+.confirm-success {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--green-light);
+  color: var(--green-deep);
+}
+
+.success-title {
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 4px;
 }
 
 /* Empty */

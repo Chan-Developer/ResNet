@@ -1,9 +1,9 @@
 import math
-from pathlib import Path
 from typing import List
 
 from ..config import settings
 from ..schemas.dataset import CategoryImageOut, CategoryOut
+from ..utils.class_names import to_display_name
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 
@@ -19,7 +19,7 @@ def get_categories() -> List[CategoryOut]:
         count = sum(1 for f in p.iterdir() if f.suffix.lower() in IMAGE_EXTENSIONS)
         categories.append(CategoryOut(
             name=p.name,
-            display_name=p.name.replace("___", " - ").replace("_", " "),
+            display_name=to_display_name(p.name),
             count=count,
         ))
     return categories
