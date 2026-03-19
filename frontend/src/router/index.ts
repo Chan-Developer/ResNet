@@ -32,6 +32,12 @@ const routes = [
     meta: { auth: true, permissions: ['history:view'] },
   },
   {
+    path: '/followup',
+    name: 'Followup',
+    component: () => import('../views/FollowupView.vue'),
+    meta: { auth: true, permissions: ['followup:manage'] },
+  },
+  {
     path: '/dataset',
     name: 'Dataset',
     component: () => import('../views/DatasetView.vue'),
@@ -65,6 +71,7 @@ const router = createRouter({
 function firstAllowedPath(userStore: ReturnType<typeof useUserStore>) {
   if (userStore.token) return '/dashboard'
   if (userStore.hasPermission('predict:single')) return '/predict'
+  if (userStore.hasPermission('followup:manage')) return '/followup'
   if (userStore.hasPermission('history:view')) return '/history'
   if (userStore.hasPermission('dataset:view')) return '/dataset'
   if (userStore.hasPermission('admin:user')) return '/admin/users'

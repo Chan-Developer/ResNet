@@ -11,6 +11,7 @@ PERMISSION_CATALOG: list[dict[str, str]] = [
     {"code": "predict:single", "name": "单张识别", "description": "执行单张图片病害识别"},
     {"code": "predict:batch", "name": "批量识别", "description": "执行批量图片病害识别"},
     {"code": "diagnosis:confirm", "name": "确认建档", "description": "确认诊断并写入病例库"},
+    {"code": "followup:manage", "name": "复查管理", "description": "创建复查计划并上传复查图片"},
     {"code": "history:view", "name": "查看历史", "description": "查看个人识别历史记录"},
     {"code": "history:delete", "name": "删除历史", "description": "删除个人识别历史记录"},
     {"code": "dataset:view", "name": "浏览数据集", "description": "浏览数据集类别和样本"},
@@ -33,6 +34,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         "predict:single",
         "predict:batch",
         "diagnosis:confirm",
+        "followup:manage",
         "history:view",
         "history:delete",
         "dataset:view",
@@ -40,6 +42,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_USER: [
         "predict:single",
         "diagnosis:confirm",
+        "followup:manage",
         "history:view",
         "dataset:view",
     ],
@@ -151,15 +154,28 @@ async def update_role_permissions(db: AsyncSession, role: str, permissions: list
 
 
 async def ensure_role_permission_defaults(db: AsyncSession) -> None:
+    changed = False
     for role in (ROLE_EXPERT, ROLE_USER):
         result = await db.execute(select(RolePermission).where(RolePermission.role == role))
         row = result.scalar_one_or_none()
-        if row is not None:
-            continue
-        db.add(
-            RolePermission(
-                role=role,
-                permissions_json=json.dumps(default_permissions_for_role(role), ensure_ascii=False),
+        default_permissions = default_permissions_for_role(role)
+        if row is None:
+            db.add(
+                RolePermission(
+                    role=role,
+                    permissions_json=json.dumps(default_permissions, ensure_ascii=False),
+                )
             )
-        )
-    await db.commit()
+            changed = True
+            continue
+
+        current_permissions = _parse_permission_json(row.permissions_json)
+        merged_permissions = current_permissions[:]
+        for code in default_permissions:
+            if code not in merged_permissions:
+                merged_permissions.append(code)
+        if merged_permissions != current_permissions:
+            row.permissions_json = json.dumps(merged_permissions, ensure_ascii=False)
+            changed = True
+    if changed:
+        await db.commit()

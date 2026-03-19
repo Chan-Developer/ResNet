@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import AsyncSessionLocal, engine
 from .models.user import Base
-from .routers import admin, alert, auth, case, dataset, health, history, predict, report
+from .routers import admin, alert, auth, case, dataset, followup, health, history, predict, report
 from .services import bootstrap_service, knowledge_service
 from .services.model_service import model_service
 
@@ -64,6 +64,7 @@ app.include_router(predict.router)
 app.include_router(case.router)
 app.include_router(history.router)
 app.include_router(dataset.router)
+app.include_router(followup.router)
 app.include_router(report.router)
 app.include_router(alert.router)
 app.include_router(health.router)
