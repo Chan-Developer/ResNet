@@ -35,6 +35,32 @@ npm run dev
 
 打开 http://localhost:5173 → 注册 → 登录 → 上传图片识别
 
+## 页面截图
+
+### 登录页
+
+![登录页](docs/screenshots/login.png)
+
+### 数据看板
+
+![数据看板](docs/screenshots/dashboard.png)
+
+### 病害识别
+
+![病害识别](docs/screenshots/predict.png)
+
+### 识别历史
+
+![识别历史](docs/screenshots/history.png)
+
+### 用户管理
+
+![用户管理](docs/screenshots/admin-users.png)
+
+### 区域预警
+
+![区域预警](docs/screenshots/region-alerts.png)
+
 ## API 接口
 
 | 方法 | 路径 | 认证 | 说明 |
