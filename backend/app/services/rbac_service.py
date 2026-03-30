@@ -18,6 +18,8 @@ PERMISSION_CATALOG: list[dict[str, str]] = [
     {"code": "admin:user", "name": "用户管理", "description": "管理用户角色和启用状态"},
     {"code": "admin:role", "name": "角色权限管理", "description": "配置角色可用权限"},
     {"code": "admin:alert", "name": "区域预警管理", "description": "查看和处理区域病害增长预警"},
+    {"code": "admin:knowledge", "name": "知识库管理", "description": "维护知识条目并控制诊断知识来源"},
+    {"code": "admin:model", "name": "模型版本管理", "description": "维护模型版本并切换在线推理模型"},
 ]
 
 ROLE_LABELS = {

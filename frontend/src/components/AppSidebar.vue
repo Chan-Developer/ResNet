@@ -72,6 +72,12 @@ const navItems = computed(() => {
   if (isAdminRole || userStore.hasPermission('admin:alert')) {
     baseItems.push({ path: '/admin/alerts', icon: '🚨', label: '区域预警' })
   }
+  if (isAdminRole || userStore.hasPermission('admin:knowledge')) {
+    baseItems.push({ path: '/admin/knowledge', icon: '📚', label: '知识库管理' })
+  }
+  if (isAdminRole || userStore.hasPermission('admin:model')) {
+    baseItems.push({ path: '/admin/models', icon: '🧠', label: '模型版本管理' })
+  }
   return baseItems
 })
 

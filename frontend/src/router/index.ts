@@ -61,6 +61,18 @@ const routes = [
     component: () => import('../views/AdminAlertsView.vue'),
     meta: { auth: true, permissions: ['admin:alert'] },
   },
+  {
+    path: '/admin/knowledge',
+    name: 'AdminKnowledge',
+    component: () => import('../views/AdminKnowledgeView.vue'),
+    meta: { auth: true, permissions: ['admin:knowledge'] },
+  },
+  {
+    path: '/admin/models',
+    name: 'AdminModels',
+    component: () => import('../views/AdminModelsView.vue'),
+    meta: { auth: true, permissions: ['admin:model'] },
+  },
 ]
 
 const router = createRouter({
@@ -77,6 +89,8 @@ function firstAllowedPath(userStore: ReturnType<typeof useUserStore>) {
   if (userStore.hasPermission('admin:user')) return '/admin/users'
   if (userStore.hasPermission('admin:role')) return '/admin/roles'
   if (userStore.hasPermission('admin:alert')) return '/admin/alerts'
+  if (userStore.hasPermission('admin:knowledge')) return '/admin/knowledge'
+  if (userStore.hasPermission('admin:model')) return '/admin/models'
   return '/login'
 }
 

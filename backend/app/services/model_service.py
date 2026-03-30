@@ -1,4 +1,5 @@
-from typing import List
+from pathlib import Path
+from typing import Any, List
 
 import torch
 import torch.nn as nn
@@ -15,6 +16,7 @@ class ModelService:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.class_names: List[str] = []
         self.class_names_source: str = ""
+        self.model_path: str = ""
         self.model: nn.Module | None = None
         self.preprocess = transforms.Compose([
             transforms.Resize(256),
@@ -23,22 +25,30 @@ class ModelService:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-    def load(self) -> None:
-        self.class_names, source_path = load_class_names()
-        self.class_names_source = str(source_path)
+    def load(self, model_path: Path | None = None, class_names_path: Path | None = None) -> None:
+        resolved_model_path = (model_path or settings.model_path).expanduser()
+        if not resolved_model_path.is_absolute():
+            resolved_model_path = settings.BASE_DIR / resolved_model_path
+        resolved_model_path = resolved_model_path.resolve()
 
-        model_path = settings.model_path
-        if not model_path.exists():
-            raise FileNotFoundError(f"模型权重文件不存在: {model_path}")
+        resolved_class_names_path = class_names_path.expanduser().resolve() if class_names_path is not None else None
+        class_names, source_path = load_class_names(class_names_path=resolved_class_names_path)
+
+        if not resolved_model_path.exists():
+            raise FileNotFoundError(f"模型权重文件不存在: {resolved_model_path}")
 
         model = models.resnet50(weights=None)
         in_features = model.fc.in_features
-        model.fc = nn.Sequential(nn.Dropout(0.5), nn.Linear(in_features, len(self.class_names)))
+        model.fc = nn.Sequential(nn.Dropout(0.5), nn.Linear(in_features, len(class_names)))
 
-        state_dict = torch.load(model_path, map_location=self.device)
+        state_dict = torch.load(resolved_model_path, map_location=self.device)
         model.load_state_dict(state_dict)
         model.to(self.device)
         model.eval()
+
+        self.class_names = class_names
+        self.class_names_source = str(source_path)
+        self.model_path = str(resolved_model_path)
         self.model = model
 
     def predict(self, image: Image.Image, top_k: int = 5) -> PredictResponse:
@@ -69,6 +79,15 @@ class ModelService:
 
     def predict_batch(self, images: List[Image.Image], top_k: int = 5) -> List[PredictResponse]:
         return [self.predict(img, top_k) for img in images]
+
+    def runtime_info(self) -> dict[str, Any]:
+        return {
+            "model_path": self.model_path,
+            "class_names_source": self.class_names_source,
+            "class_count": len(self.class_names),
+            "device": str(self.device),
+            "loaded": self.model is not None and bool(self.class_names),
+        }
 
 
 model_service = ModelService()

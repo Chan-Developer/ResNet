@@ -2,8 +2,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.case import KnowledgeChunk
+from ..schemas.admin_manage import KnowledgeChunkCreate, KnowledgeChunkUpdate
 from ..schemas.diagnosis import EvidenceItem
 from ..utils.label_parser import LabelProfile, parse_label
+from ..utils.errors import bad_request, not_found
 
 
 def _family_title(profile: LabelProfile) -> str:
@@ -150,6 +152,183 @@ async def bootstrap_knowledge(db: AsyncSession, class_names: list[str]) -> None:
             seen_families.add(family_key)
     chunks.append(_build_global_safety_chunk())
     db.add_all(chunks)
+    await db.commit()
+
+
+def _normalize_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _normalize_tags(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        cleaned = value.strip()
+        if not cleaned or cleaned in seen:
+            continue
+        seen.add(cleaned)
+        result.append(cleaned)
+    return result
+
+
+def _to_manage_dict(chunk: KnowledgeChunk) -> dict:
+    return {
+        "id": chunk.id,
+        "label_key": chunk.label_key,
+        "crop_name": chunk.crop_name,
+        "disease_family": chunk.disease_family,
+        "health_status": chunk.health_status,
+        "source_type": chunk.source_type,
+        "source_name": chunk.source_name,
+        "title": chunk.title,
+        "content": chunk.content,
+        "url": chunk.url or "",
+        "tags_json": _normalize_tags(chunk.tags_json if isinstance(chunk.tags_json, list) else []),
+        "created_at": chunk.created_at,
+        "updated_at": chunk.updated_at,
+    }
+
+
+async def list_knowledge_chunks(
+    db: AsyncSession,
+    *,
+    keyword: str | None = None,
+    label_key: str | None = None,
+    crop_name: str | None = None,
+    disease_family: str | None = None,
+    health_status: str | None = None,
+    limit: int = 300,
+) -> list[dict]:
+    stmt = select(KnowledgeChunk).order_by(KnowledgeChunk.updated_at.desc(), KnowledgeChunk.id.desc())
+
+    keyword_value = _normalize_optional(keyword)
+    label_value = _normalize_optional(label_key)
+    crop_value = _normalize_optional(crop_name)
+    family_value = _normalize_optional(disease_family)
+    status_value = _normalize_optional(health_status)
+
+    if keyword_value:
+        like_value = f"%{keyword_value}%"
+        stmt = stmt.where(
+            or_(
+                KnowledgeChunk.title.ilike(like_value),
+                KnowledgeChunk.content.ilike(like_value),
+                KnowledgeChunk.source_name.ilike(like_value),
+                KnowledgeChunk.label_key.ilike(like_value),
+            )
+        )
+    if label_value:
+        stmt = stmt.where(KnowledgeChunk.label_key == label_value)
+    if crop_value:
+        stmt = stmt.where(KnowledgeChunk.crop_name == crop_value)
+    if family_value:
+        stmt = stmt.where(KnowledgeChunk.disease_family == family_value)
+    if status_value:
+        stmt = stmt.where(KnowledgeChunk.health_status == status_value)
+
+    limit = max(1, min(limit, 1000))
+    stmt = stmt.limit(limit)
+    result = await db.execute(stmt)
+    chunks = result.scalars().all()
+    return [_to_manage_dict(chunk) for chunk in chunks]
+
+
+async def create_knowledge_chunk(db: AsyncSession, payload: KnowledgeChunkCreate) -> dict:
+    title = payload.title.strip()
+    content = payload.content.strip()
+    if not title:
+        raise bad_request("标题不能为空")
+    if not content:
+        raise bad_request("内容不能为空")
+
+    chunk = KnowledgeChunk(
+        label_key=_normalize_optional(payload.label_key),
+        crop_name=_normalize_optional(payload.crop_name),
+        disease_family=_normalize_optional(payload.disease_family),
+        health_status=payload.health_status.strip() or "diseased",
+        source_type=payload.source_type.strip() or "internal",
+        source_name=payload.source_name.strip() or "PlantCare 知识库",
+        title=title,
+        content=content,
+        url=payload.url.strip(),
+        tags_json=_normalize_tags(payload.tags_json),
+    )
+    db.add(chunk)
+    await db.commit()
+    await db.refresh(chunk)
+    return _to_manage_dict(chunk)
+
+
+async def update_knowledge_chunk(db: AsyncSession, chunk_id: int, payload: KnowledgeChunkUpdate) -> dict:
+    chunk = await db.get(KnowledgeChunk, chunk_id)
+    if chunk is None:
+        raise not_found("知识条目不存在")
+
+    touched = False
+    if payload.label_key is not None:
+        chunk.label_key = _normalize_optional(payload.label_key)
+        touched = True
+    if payload.crop_name is not None:
+        chunk.crop_name = _normalize_optional(payload.crop_name)
+        touched = True
+    if payload.disease_family is not None:
+        chunk.disease_family = _normalize_optional(payload.disease_family)
+        touched = True
+    if payload.health_status is not None:
+        status = payload.health_status.strip()
+        if not status:
+            raise bad_request("health_status 不能为空")
+        chunk.health_status = status
+        touched = True
+    if payload.source_type is not None:
+        source_type = payload.source_type.strip()
+        if not source_type:
+            raise bad_request("source_type 不能为空")
+        chunk.source_type = source_type
+        touched = True
+    if payload.source_name is not None:
+        source_name = payload.source_name.strip()
+        if not source_name:
+            raise bad_request("source_name 不能为空")
+        chunk.source_name = source_name
+        touched = True
+    if payload.title is not None:
+        title = payload.title.strip()
+        if not title:
+            raise bad_request("标题不能为空")
+        chunk.title = title
+        touched = True
+    if payload.content is not None:
+        content = payload.content.strip()
+        if not content:
+            raise bad_request("内容不能为空")
+        chunk.content = content
+        touched = True
+    if payload.url is not None:
+        chunk.url = payload.url.strip()
+        touched = True
+    if payload.tags_json is not None:
+        chunk.tags_json = _normalize_tags(payload.tags_json)
+        touched = True
+
+    if not touched:
+        raise bad_request("至少需要更新一个字段")
+
+    await db.commit()
+    await db.refresh(chunk)
+    return _to_manage_dict(chunk)
+
+
+async def delete_knowledge_chunk(db: AsyncSession, chunk_id: int) -> None:
+    chunk = await db.get(KnowledgeChunk, chunk_id)
+    if chunk is None:
+        raise not_found("知识条目不存在")
+    await db.delete(chunk)
     await db.commit()
 
 
