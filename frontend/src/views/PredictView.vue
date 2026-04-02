@@ -161,10 +161,8 @@
           </p>
 
           <div v-if="confirmedCase" class="confirm-success">
-            <div class="success-title">病例已建档 #{{ confirmedCase.case.id }}</div>
-            <div class="success-text">
-              已按「{{ confirmedCase.case.confirmed_display_name }}」写入数据库。
-            </div>
+            <div class="success-title">建档成功（历史记录 #{{ confirmedCase.case.prediction_record_id }}）</div>
+            <div class="success-text">已按「{{ confirmedCase.case.confirmed_display_name }}」写入数据库。</div>
           </div>
         </div>
       </div>
