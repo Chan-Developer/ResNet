@@ -1,5 +1,4 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +8,7 @@ from .config import settings
 from .database import AsyncSessionLocal, engine
 from .models.user import Base
 from .routers import admin, alert, auth, case, dataset, followup, health, history, predict, report
-from .services import bootstrap_service, knowledge_service, model_registry_service
+from .services import bootstrap_service, knowledge_service
 from .services.model_service import model_service
 
 
@@ -24,31 +23,13 @@ async def lifespan(app: FastAPI):
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     (settings.upload_dir / "drafts").mkdir(parents=True, exist_ok=True)
 
-    active_model_version = None
+    # 初始化账户与权限
     async with AsyncSessionLocal() as session:
         await bootstrap_service.ensure_admin_account(session)
         await bootstrap_service.ensure_role_permissions(session)
-        await model_registry_service.bootstrap_default_model_version(session)
-        active_model_version = await model_registry_service.get_active_model_version(session)
 
-    # 加载模型（优先加载激活版本）
-    if active_model_version is not None:
-        model_path = Path(active_model_version.model_path)
-        if not model_path.is_absolute():
-            model_path = settings.BASE_DIR / model_path
-        class_names_path = (
-            Path(active_model_version.class_names_path)
-            if active_model_version.class_names_path
-            else None
-        )
-        if class_names_path is not None and not class_names_path.is_absolute():
-            class_names_path = settings.BASE_DIR / class_names_path
-        try:
-            model_service.load(model_path=model_path, class_names_path=class_names_path)
-        except Exception:
-            model_service.load()
-    else:
-        model_service.load()
+    # 加载模型
+    model_service.load()
 
     # 初始化知识库
     async with AsyncSessionLocal() as session:

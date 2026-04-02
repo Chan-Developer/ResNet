@@ -19,7 +19,7 @@ INSERT INTO `user` (`id`, `username`, `email`, `hashed_password`, `is_active`, `
 -- ----------------------------
 -- Records of `role_permission`
 -- ----------------------------
-INSERT INTO `role_permission` (`id`, `role`, `permissions_json`, `updated_at`) VALUES (1, 'expert', '["dataset:view", "diagnosis:confirm", "history:delete", "history:view", "predict:batch", "predict:single", "followup:manage"]', '2026-03-19 12:50:10');
+INSERT INTO `role_permission` (`id`, `role`, `permissions_json`, `updated_at`) VALUES (1, 'expert', '["dataset:view", "diagnosis:confirm", "history:delete", "history:view", "predict:single", "followup:manage"]', '2026-03-19 12:50:10');
 INSERT INTO `role_permission` (`id`, `role`, `permissions_json`, `updated_at`) VALUES (2, 'user', '["predict:single", "diagnosis:confirm", "history:view", "dataset:view", "followup:manage"]', '2026-03-19 12:50:10');
 
 -- ----------------------------

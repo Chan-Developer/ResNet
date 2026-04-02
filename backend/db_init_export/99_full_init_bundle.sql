@@ -214,7 +214,7 @@ INSERT INTO `user` (`id`, `username`, `email`, `hashed_password`, `is_active`, `
 -- ----------------------------
 -- Records of `role_permission`
 -- ----------------------------
-INSERT INTO `role_permission` (`id`, `role`, `permissions_json`, `updated_at`) VALUES (1, 'expert', '["dataset:view", "diagnosis:confirm", "history:delete", "history:view", "predict:batch", "predict:single", "followup:manage"]', '2026-03-19 12:50:10');
+INSERT INTO `role_permission` (`id`, `role`, `permissions_json`, `updated_at`) VALUES (1, 'expert', '["dataset:view", "diagnosis:confirm", "history:delete", "history:view", "predict:single", "followup:manage"]', '2026-03-19 12:50:10');
 INSERT INTO `role_permission` (`id`, `role`, `permissions_json`, `updated_at`) VALUES (2, 'user', '["predict:single", "diagnosis:confirm", "history:view", "dataset:view", "followup:manage"]', '2026-03-19 12:50:10');
 
 -- ----------------------------
@@ -415,7 +415,6 @@ INSERT INTO project_api_catalog (method, path, permission_code, related_tables, 
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('GET', '/api/history', 'history:view', 'prediction_record,disease_case', NULL);
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('DELETE', '/api/history/{record_id}', 'history:delete', 'prediction_record,disease_case', NULL);
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('POST', '/api/predict', 'predict:single', 'prediction_record,knowledge_chunk', NULL);
-INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('POST', '/api/predict/batch', 'predict:batch', 'prediction_record,knowledge_chunk', NULL);
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('POST', '/api/predict/diagnose', 'predict:single', 'prediction_record,knowledge_chunk', NULL);
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('GET', '/api/report/export.csv', NULL, 'prediction_record,disease_case', '统计看板与报表导出');
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('GET', '/api/report/export.xlsx', NULL, 'prediction_record,disease_case', '统计看板与报表导出');

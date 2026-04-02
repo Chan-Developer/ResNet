@@ -5,7 +5,7 @@
       <div class="header-icon">🕘</div>
       <div>
         <h2>识别历史</h2>
-        <p class="header-desc">查看你所有的植物病害识别记录</p>
+        <p class="header-desc">查看你所有的农作物病害识别记录</p>
       </div>
     </div>
 
@@ -14,7 +14,7 @@
       <div v-if="records.length === 0 && !loading" class="empty-state">
         <div class="empty-icon">🍀</div>
         <p>还没有识别记录哦~</p>
-        <p class="empty-hint">去「病害识别」页面上传图片试试吧</p>
+        <p class="empty-hint">去「农作物识别」页面上传图片试试吧</p>
       </div>
 
       <div
@@ -32,6 +32,7 @@
         </div>
         <div class="card-content">
           <div class="card-top">
+            <span class="record-id">#{{ record.id }}</span>
             <span class="disease-tag">{{ formatName(record.top1_class) }}</span>
             <span class="time">{{ formatTime(record.created_at) }}</span>
           </div>
@@ -72,6 +73,7 @@ import { ElMessage } from 'element-plus'
 import ConfidenceBar from '../components/ConfidenceBar.vue'
 import { getHistory, deleteHistory } from '../api/history'
 import { useUserStore } from '../stores/user'
+import { toDisplayName } from '../utils/className'
 
 const userStore = useUserStore()
 const loading = ref(false)
@@ -82,7 +84,7 @@ const pageSize = ref(20)
 const canDeleteHistory = computed(() => userStore.hasPermission('history:delete'))
 
 function formatName(name: string) {
-  return name?.replace(/___/g, ' - ').replace(/_/g, ' ') || ''
+  return toDisplayName(name || '')
 }
 
 function formatTime(t: string) {
@@ -235,6 +237,12 @@ onMounted(fetchData)
   justify-content: space-between;
   margin-bottom: 8px;
   gap: 8px;
+  flex-wrap: wrap;
+}
+.record-id {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
 }
 .disease-tag {
   font-size: 14px;

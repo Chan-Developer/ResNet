@@ -2,53 +2,51 @@
   <div class="predict-page">
     <!-- 页面标题 -->
     <div class="page-header">
-      <div class="header-icon">AI</div>
+      <div class="header-icon">智诊</div>
       <div>
-        <h2>植物病害识别</h2>
-        <p class="header-desc">上传植物叶片照片，AI 帮你快速诊断病害类型</p>
+        <h2>农作物病害识别</h2>
+        <p class="header-desc">上传农作物叶片照片，系统帮你快速诊断病害类型</p>
       </div>
     </div>
 
-    <!-- 模式切换 -->
-    <div class="mode-switch">
-      <button
-        class="mode-btn"
-        :class="{ active: mode === 'single' }"
-        @click="mode = 'single'"
-      >
-        <span>单张识别</span>
-        <small>适合深度诊断</small>
-      </button>
-      <button
-        v-if="canBatch"
-        class="mode-btn"
-        :class="{ active: mode === 'batch' }"
-        @click="mode = 'batch'"
-      >
-        <span>批量识别</span>
-        <small>适合快速筛查</small>
-      </button>
-    </div>
-
-    <div class="mode-tip">
-      <span class="tip-chip">{{ mode === 'single' ? '智能诊断模式' : '批量筛查模式' }}</span>
-      <span class="tip-text">当前已选择 {{ files.length }} 张图片</span>
-    </div>
-
-    <!-- 上传区域 -->
-    <ImageUploader :key="uploaderKey" :multiple="mode === 'batch'" :limit="10" @change="onFilesChange" />
-
-    <!-- 操作栏 -->
-    <div class="actions-bar">
-      <div class="topk-field">
-        <label>识别数量 Top-K</label>
-        <el-input-number v-model="topK" :min="1" :max="maxTopK" size="default" />
+    <section class="predict-shell">
+      <div class="upload-head">
+        <h3>上传图片</h3>
+        <span class="upload-hint">{{ files.length ? '已上传 1 张，支持删除后重新上传' : '请先上传 1 张叶片图片' }}</span>
       </div>
-      <button class="predict-btn" :disabled="loading || !files.length" @click="handlePredict">
-        <span v-if="loading" class="spinner"></span>
-        {{ loading ? '识别中...' : '开始识别' }}
-      </button>
-    </div>
+      <div class="shell-grid">
+        <div class="upload-pane">
+          <ImageUploader :key="uploaderKey" :multiple="false" :limit="1" @change="onFilesChange" />
+        </div>
+        <aside class="guide-pane">
+          <h4>识别流程</h4>
+          <div class="guide-item" :class="{ done: files.length > 0 }">
+            1. 上传叶片图片
+          </div>
+          <div class="guide-item" :class="{ done: draft }">
+            2. 点击开始识别
+          </div>
+          <div class="guide-item" :class="{ done: !!confirmedCase }">
+            3. 需要时确认建档
+          </div>
+          <div class="guide-status">
+            当前状态：{{ files.length ? (draft ? '已识别，可查看结果' : '可开始识别') : '等待上传图片' }}
+          </div>
+        </aside>
+      </div>
+
+      <!-- 操作栏 -->
+      <div class="actions-bar compact">
+        <div class="topk-field">
+          <label>候选结果数量</label>
+          <el-input-number v-model="topK" :min="1" :max="maxTopK" size="default" />
+        </div>
+        <button class="predict-btn" :disabled="loading || !files.length" @click="handlePredict">
+          <span v-if="loading" class="spinner"></span>
+          {{ loading ? '识别中...' : '开始识别' }}
+        </button>
+      </div>
+    </section>
 
     <!-- 结果展示 -->
     <div v-if="draft" class="results-section">
@@ -61,7 +59,7 @@
       </div>
 
       <div class="diagnosis-grid">
-        <div class="insight-card">
+        <div class="insight-card advice-card">
           <div class="meta-row">
             <span class="meta-chip">{{ draft.crop_name }}</span>
             <span class="meta-chip" :class="draft.health_status">
@@ -83,7 +81,7 @@
           <p class="notice-text">{{ draft.advice.follow_up }}</p>
         </div>
 
-        <div class="insight-card">
+        <div class="insight-card evidence-card">
           <h4>知识证据</h4>
           <div
             v-for="item in draft.knowledge_evidence"
@@ -100,7 +98,7 @@
           </div>
         </div>
 
-        <div class="insight-card">
+        <div class="insight-card similar-card">
           <h4>相似病例</h4>
           <div v-if="!draft.similar_cases.length" class="empty-mini">
             暂无已确认相似病例，将主要依据知识证据给出处置建议。
@@ -127,14 +125,12 @@
           </div>
         </div>
 
-        <div class="insight-card">
+        <div class="insight-card confirm-card">
           <h4>确认建档</h4>
-          <p v-if="canConfirmDiagnosis" class="confirm-hint">
-            只有点击确认后，诊断结果才会写入数据库并进入病例库。
-          </p>
           <template v-if="canConfirmDiagnosis">
             <label class="confirm-label">确认标签</label>
             <select v-model="confirmedLabel" class="confirm-select">
+              <option value="">以上都不对</option>
               <option
                 v-for="item in draft.predictions"
                 :key="item.class_name"
@@ -143,27 +139,17 @@
                 {{ item.display_name }} · {{ formatPercent(item.confidence) }}
               </option>
             </select>
-            <label class="confirm-label">区域信息（可选）</label>
             <div class="location-grid">
-              <input v-model="locationForm.province" class="location-input" placeholder="省份" />
-              <input v-model="locationForm.city" class="location-input" placeholder="城市" />
-              <input v-model="locationForm.district" class="location-input" placeholder="区县" />
-              <input
-                v-model="locationForm.lat"
-                class="location-input"
-                placeholder="纬度（可选）"
-                inputmode="decimal"
-              />
-              <input
-                v-model="locationForm.lng"
-                class="location-input"
-                placeholder="经度（可选）"
-                inputmode="decimal"
-              />
+              <select v-model="locationForm.province" class="location-input">
+                <option value="">请选择区域</option>
+                <option v-for="item in regionOptions" :key="`province-${item}`" :value="item">
+                  {{ item }}
+                </option>
+              </select>
             </div>
             <button
               class="predict-btn confirm-btn"
-              :disabled="confirmLoading || !!confirmedCase"
+              :disabled="confirmLoading || !!confirmedCase || !locationForm.province"
               @click="handleConfirmDiagnosis"
             >
               <span v-if="confirmLoading" class="spinner"></span>
@@ -184,85 +170,53 @@
       </div>
     </div>
 
-    <div v-if="results.length" class="results-section">
-      <div class="section-title">
-        <h3>识别结果</h3>
-      </div>
-      <div class="result-grid">
-        <PredictionCard
-          v-for="(r, i) in results"
-          :key="i"
-          :result="r"
-          :image-url="previewUrls[i]"
-        />
-      </div>
-    </div>
-
     <!-- 空状态 -->
-    <div v-if="!results.length && !draft && !loading" class="empty-state">
+    <div v-if="!draft && !loading" class="empty-state">
       <div class="empty-icon">🍃</div>
-      <p>上传植物照片开始识别吧~</p>
+      <p>上传农作物照片开始识别吧~</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import ImageUploader from '../components/ImageUploader.vue'
 import PredictionCard from '../components/PredictionCard.vue'
-import { diagnoseSingle, predictBatch, confirmDiagnosis } from '../api/predict'
+import { diagnoseSingle, confirmDiagnosis } from '../api/predict'
 import { useUserStore } from '../stores/user'
 
 const userStore = useUserStore()
-const mode = ref<'single' | 'batch'>('single')
 const topK = ref(5)
 const maxTopK = 20
 const loading = ref(false)
 const confirmLoading = ref(false)
 const files = ref<File[]>([])
 const previewUrls = ref<string[]>([])
-const results = ref<any[]>([])
 const draft = ref<any | null>(null)
 const confirmedLabel = ref('')
 const confirmedCase = ref<any | null>(null)
 const locationForm = reactive({
   province: '',
-  city: '',
-  district: '',
-  lat: '',
-  lng: '',
 })
 const uploaderKey = ref(0)
-const canBatch = computed(() => userStore.hasPermission('predict:batch'))
 const canConfirmDiagnosis = computed(() => userStore.hasPermission('diagnosis:confirm'))
+const regionOptions = ['区域1', '区域2', '区域3', '区域4', '区域5']
 
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(1)}%`
 }
 
 function resetPredictState() {
-  results.value = []
   draft.value = null
   confirmedLabel.value = ''
   confirmedCase.value = null
   locationForm.province = ''
-  locationForm.city = ''
-  locationForm.district = ''
-  locationForm.lat = ''
-  locationForm.lng = ''
 }
 
 function toOptionalText(value: string) {
   const text = value.trim()
   return text || undefined
-}
-
-function toOptionalNumber(value: string) {
-  const text = value.trim()
-  if (!text) return undefined
-  const parsed = Number(text)
-  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function onFilesChange(newFiles: File[]) {
@@ -277,18 +231,9 @@ async function handlePredict() {
   loading.value = true
   resetPredictState()
   try {
-    if (mode.value === 'single') {
-      const res: any = await diagnoseSingle(files.value[0], topK.value)
-      draft.value = res.data
-      confirmedLabel.value = res.data.best_prediction?.class_name || ''
-    } else {
-      if (!canBatch.value) {
-        ElMessage.warning('当前角色无批量识别权限')
-        return
-      }
-      const res: any = await predictBatch(files.value, topK.value)
-      results.value = res.data
-    }
+    const res: any = await diagnoseSingle(files.value[0], topK.value)
+    draft.value = res.data
+    confirmedLabel.value = res.data.best_prediction?.class_name || ''
   } catch {
     ElMessage.error('识别失败')
   } finally {
@@ -302,16 +247,17 @@ async function handleConfirmDiagnosis() {
     return
   }
   if (!draft.value?.draft_token) return
+  if (!locationForm.province) {
+    ElMessage.warning('请先选择区域')
+    return
+  }
   confirmLoading.value = true
   try {
+    const selectedLabel = confirmedLabel.value.trim()
     const res: any = await confirmDiagnosis({
       draft_token: draft.value.draft_token,
-      confirmed_label: confirmedLabel.value,
+      confirmed_label: selectedLabel || undefined,
       province: toOptionalText(locationForm.province),
-      city: toOptionalText(locationForm.city),
-      district: toOptionalText(locationForm.district),
-      lat: toOptionalNumber(locationForm.lat),
-      lng: toOptionalNumber(locationForm.lng),
     })
     confirmedCase.value = res.data
     ElMessage.success('病例已建档')
@@ -321,20 +267,6 @@ async function handleConfirmDiagnosis() {
     confirmLoading.value = false
   }
 }
-
-watch(mode, () => {
-  previewUrls.value.forEach((u) => URL.revokeObjectURL(u))
-  files.value = []
-  previewUrls.value = []
-  resetPredictState()
-  uploaderKey.value += 1
-})
-
-watch(canBatch, (enabled) => {
-  if (!enabled && mode.value === 'batch') {
-    mode.value = 'single'
-  }
-})
 
 onBeforeUnmount(() => {
   previewUrls.value.forEach((u) => URL.revokeObjectURL(u))
@@ -381,6 +313,122 @@ onBeforeUnmount(() => {
   font-size: 13px;
   color: var(--text-muted);
   font-weight: 600;
+}
+
+.predict-shell {
+  margin: 12px 0 26px;
+  padding: 16px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 238, 244, 0.6), transparent 42%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(252, 247, 250, 0.88));
+  border: 1px solid rgba(232, 216, 223, 0.9);
+  box-shadow: 0 10px 30px rgba(57, 31, 44, 0.06);
+}
+
+.shell-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.upload-pane {
+  min-width: 0;
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(231, 217, 224, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-pane {
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(247, 242, 245, 0.75));
+  border: 1px solid rgba(231, 217, 224, 0.88);
+}
+
+.guide-pane h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.guide-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(231, 217, 224, 0.8);
+}
+
+.guide-item.done {
+  background: rgba(219, 238, 232, 0.68);
+  color: #2b6f5c;
+  border-color: rgba(93, 156, 135, 0.35);
+}
+
+.guide-status {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px dashed rgba(214, 193, 203, 0.7);
+  padding-top: 8px;
+}
+
+.upload-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.upload-head h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.upload-pane :deep(.uploader-wrap) {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.upload-pane :deep(.cute-upload) {
+  display: flex;
+  justify-content: center;
+}
+
+.upload-pane :deep(.el-upload-list--picture-card) {
+  width: auto;
+}
+
+.upload-pane :deep(.el-upload--picture-card) {
+  width: 220px;
+  height: 220px;
+  margin: 0;
+}
+
+.upload-pane :deep(.el-upload-list--picture-card .el-upload-list__item) {
+  width: 220px;
+  height: 220px;
+}
+
+.upload-pane :deep(.upload-tip) {
+  text-align: center;
+  margin-top: 10px;
 }
 
 /* Mode Switch */
@@ -461,6 +509,13 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid rgba(232, 216, 223, 0.78);
 }
+
+.actions-bar.compact {
+  margin: 12px 0 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(231, 217, 224, 0.9);
+}
 .topk-field {
   display: flex;
   flex-direction: column;
@@ -535,15 +590,25 @@ onBeforeUnmount(() => {
 }
 .result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
+  width: 100%;
+}
+
+.result-grid :deep(.prediction-card) {
+  width: 100%;
+}
+
+.result-grid :deep(.card-image) {
+  min-height: 240px;
 }
 
 .diagnosis-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
   margin-top: 16px;
+  align-items: stretch;
 }
 
 .insight-card {
@@ -552,13 +617,36 @@ onBeforeUnmount(() => {
   border: 1px solid var(--card-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
-  padding: 18px;
+  padding: 16px;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
 }
 
 .insight-card h4 {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font-size: 17px;
   color: var(--text-primary);
+}
+
+.advice-card {
+  min-height: 360px;
+}
+
+.evidence-card,
+.similar-card,
+.confirm-card {
+  min-height: 320px;
+}
+
+.evidence-card .evidence-item {
+  max-height: 170px;
+  overflow: auto;
+}
+
+.similar-card .case-item {
+  max-height: 170px;
+  overflow: auto;
 }
 
 .meta-row {
@@ -718,7 +806,7 @@ onBeforeUnmount(() => {
 
 .location-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   margin-top: 10px;
 }
@@ -780,11 +868,32 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 720px) {
+  .shell-grid {
+    grid-template-columns: 1fr;
+  }
+  .upload-pane :deep(.el-upload--picture-card) {
+    width: 100%;
+    max-width: 260px;
+    height: 180px;
+  }
+  .upload-pane :deep(.el-upload-list--picture-card .el-upload-list__item) {
+    width: 100%;
+    max-width: 260px;
+    height: 180px;
+  }
+  .upload-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
   .actions-bar {
     flex-direction: column;
     align-items: stretch;
   }
   .result-grid {
+    grid-template-columns: 1fr;
+  }
+  .diagnosis-grid {
     grid-template-columns: 1fr;
   }
   .location-grid {

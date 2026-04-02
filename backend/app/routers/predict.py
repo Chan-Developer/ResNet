@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,59 +110,3 @@ async def predict_single(
         saved.image.close()
 
     return ApiResponse(data=result)
-
-
-@router.post("/batch", response_model=ApiResponse[List[PredictResponse]])
-async def predict_batch(
-    files: List[UploadFile] = File(...),
-    top_k: int = settings.TOP_K,
-    db: AsyncSession = Depends(get_db),
-    user=Depends(require_permissions("predict:batch")),
-    svc: ModelService = Depends(get_model_service),
-):
-    top_k = _validate_top_k(top_k)
-    if len(files) < 1:
-        raise bad_request("请至少上传 1 张图片")
-    if len(files) > settings.MAX_BATCH_SIZE:
-        raise bad_request(f"最多同时上传 {settings.MAX_BATCH_SIZE} 张图片")
-
-    saved_uploads: List[upload_service.SavedUpload] = []
-    total_size = 0
-    try:
-        for file in files:
-            saved = await upload_service.save_image_upload(file)
-            saved_uploads.append(saved)
-            total_size += saved.size_bytes
-            if total_size > settings.max_batch_total_size_bytes:
-                raise upload_service.payload_too_large(
-                    f"批量上传总大小不能超过 {settings.MAX_BATCH_TOTAL_SIZE_MB}MB"
-                )
-    except Exception:
-        upload_service.cleanup_saved_uploads(saved_uploads)
-        raise
-
-    results: List[PredictResponse] = []
-    created_count = 0
-    try:
-        for saved in saved_uploads:
-            result = svc.predict(saved.image, top_k)
-            await history_service.create_record(
-                db,
-                user_id=user.id,
-                image_filename=saved.filename,
-                image_url=saved.url,
-                top1_class=result.best_prediction.class_name if result.best_prediction else "",
-                top1_confidence=result.best_prediction.confidence if result.best_prediction else 0,
-                top_k=result.top_k,
-                results_json=[p.model_dump() for p in result.predictions],
-            )
-            results.append(result)
-            created_count += 1
-    except Exception:
-        upload_service.cleanup_saved_uploads(saved_uploads[created_count:])
-        raise
-    finally:
-        for saved in saved_uploads:
-            saved.image.close()
-
-    return ApiResponse(data=results)

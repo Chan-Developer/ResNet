@@ -77,9 +77,6 @@ class ModelService:
             best_prediction=predictions[0] if predictions else None,
         )
 
-    def predict_batch(self, images: List[Image.Image], top_k: int = 5) -> List[PredictResponse]:
-        return [self.predict(img, top_k) for img in images]
-
     def runtime_info(self) -> dict[str, Any]:
         return {
             "model_path": self.model_path,

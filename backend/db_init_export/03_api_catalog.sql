@@ -37,7 +37,6 @@ INSERT INTO project_api_catalog (method, path, permission_code, related_tables, 
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('GET', '/api/history', 'history:view', 'prediction_record,disease_case', NULL);
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('DELETE', '/api/history/{record_id}', 'history:delete', 'prediction_record,disease_case', NULL);
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('POST', '/api/predict', 'predict:single', 'prediction_record,knowledge_chunk', NULL);
-INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('POST', '/api/predict/batch', 'predict:batch', 'prediction_record,knowledge_chunk', NULL);
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('POST', '/api/predict/diagnose', 'predict:single', 'prediction_record,knowledge_chunk', NULL);
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('GET', '/api/report/export.csv', NULL, 'prediction_record,disease_case', '统计看板与报表导出');
 INSERT INTO project_api_catalog (method, path, permission_code, related_tables, note) VALUES ('GET', '/api/report/export.xlsx', NULL, 'prediction_record,disease_case', '统计看板与报表导出');

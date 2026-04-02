@@ -4,8 +4,8 @@
     <div class="logo-area">
       <div class="logo-icon">PC</div>
       <div class="logo-text">
-        <span class="logo-title">PlantCare</span>
-        <span class="logo-sub">植物病害识别</span>
+        <span class="logo-title">农作慧诊</span>
+        <span class="logo-sub">农作物病害识别</span>
       </div>
     </div>
 
@@ -52,7 +52,7 @@ const navItems = computed(() => {
   baseItems.push({ path: '/dashboard', icon: '📊', label: '数据看板' })
   const isAdminRole = userStore.isAdmin
   if (userStore.hasPermission('predict:single')) {
-    baseItems.push({ path: '/predict', icon: '🌿', label: '病害识别' })
+    baseItems.push({ path: '/predict', icon: '🌿', label: '农作物识别' })
   }
   if (userStore.hasPermission('followup:manage')) {
     baseItems.push({ path: '/followup', icon: '🩺', label: '复查计划' })
@@ -70,13 +70,9 @@ const navItems = computed(() => {
     baseItems.push({ path: '/admin/roles', icon: '🛡️', label: '角色权限' })
   }
   if (isAdminRole || userStore.hasPermission('admin:alert')) {
-    baseItems.push({ path: '/admin/alerts', icon: '🚨', label: '区域预警' })
   }
   if (isAdminRole || userStore.hasPermission('admin:knowledge')) {
     baseItems.push({ path: '/admin/knowledge', icon: '📚', label: '知识库管理' })
-  }
-  if (isAdminRole || userStore.hasPermission('admin:model')) {
-    baseItems.push({ path: '/admin/models', icon: '🧠', label: '模型版本管理' })
   }
   return baseItems
 })

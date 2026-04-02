@@ -146,6 +146,8 @@ class FollowupServiceTestCase(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(first.effect_status, "improved")
             self.assertEqual(first.target_confidence_delta, -0.2)
+            self.assertIn("康复情况", first.llm_summary)
+            self.assertNotIn("置信度由", first.llm_summary)
 
             second = await followup_service.create_followup_checkin_from_prediction(
                 db,

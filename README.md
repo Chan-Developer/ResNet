@@ -69,7 +69,6 @@ npm run dev
 | POST | /api/auth/login | 否 | 登录 |
 | GET | /api/auth/me | 是 | 当前用户 |
 | POST | /api/predict | 是 | 单张识别 |
-| POST | /api/predict/batch | 是 | 批量识别 |
 | GET | /api/history | 是 | 识别历史 |
 | DELETE | /api/history/{id} | 是 | 删除记录 |
 | GET | /api/dataset/categories | 否 | 类别列表 |

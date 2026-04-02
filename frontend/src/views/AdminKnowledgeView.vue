@@ -33,6 +33,33 @@
           <p>按关键字、标签、作物和病害类型快速定位目标知识条目。</p>
         </div>
       </div>
+      <div class="quick-filters">
+        <span class="quick-label">快捷筛选</span>
+        <button
+          class="chip-btn"
+          :class="{ active: filters.health_status === '' }"
+          :disabled="loading"
+          @click="setHealthFilter('')"
+        >
+          全部
+        </button>
+        <button
+          class="chip-btn"
+          :class="{ active: filters.health_status === 'diseased' }"
+          :disabled="loading"
+          @click="setHealthFilter('diseased')"
+        >
+          病害
+        </button>
+        <button
+          class="chip-btn"
+          :class="{ active: filters.health_status === 'healthy' }"
+          :disabled="loading"
+          @click="setHealthFilter('healthy')"
+        >
+          健康
+        </button>
+      </div>
       <div class="filter-grid">
         <label>
           <span>关键字</span>
@@ -142,38 +169,51 @@
 
       <div v-if="!knowledgeList.length && !loading" class="empty-state">暂无知识条目。</div>
 
-      <article v-for="item in knowledgeList" :key="item.id" class="knowledge-item">
-        <header class="item-header">
-          <div>
-            <h4>{{ item.title }}</h4>
-            <div class="meta-line">
-              <span>#{{ item.id }}</span>
-              <span>{{ item.source_name }}</span>
-              <span>{{ item.health_status }}</span>
-              <span>{{ formatDate(item.updated_at) }}</span>
+      <div class="list-grid">
+        <article v-for="item in pagedKnowledgeList" :key="item.id" class="knowledge-item">
+          <header class="item-header">
+            <div>
+              <h4>{{ item.title }}</h4>
+              <div class="meta-line">
+                <span>#{{ item.id }}</span>
+                <span>{{ item.source_name }}</span>
+                <span>{{ formatDate(item.updated_at) }}</span>
+              </div>
             </div>
+            <div class="item-actions">
+              <button class="mini-btn" @click="editItem(item)">编辑</button>
+              <button class="mini-btn danger" :disabled="deletingId === item.id" @click="removeItem(item)">
+                {{ deletingId === item.id ? '删除中...' : '删除' }}
+              </button>
+            </div>
+          </header>
+
+          <div class="pill-row">
+            <span class="meta-pill">{{ item.health_status }}</span>
+            <span class="meta-pill">{{ item.source_type }}</span>
+            <span class="meta-pill">crop: {{ item.crop_name || '--' }}</span>
+            <span class="meta-pill">family: {{ item.disease_family || '--' }}</span>
           </div>
-          <div class="item-actions">
-            <button class="mini-btn" @click="editItem(item)">编辑</button>
-            <button class="mini-btn danger" :disabled="deletingId === item.id" @click="removeItem(item)">
-              {{ deletingId === item.id ? '删除中...' : '删除' }}
-            </button>
+
+          <p class="item-content">{{ item.content }}</p>
+
+          <div class="meta-line">
+            <span>label: {{ item.label_key || '--' }}</span>
+            <span>url: {{ item.url || '--' }}</span>
           </div>
-        </header>
 
-        <p class="item-content">{{ item.content }}</p>
+          <div class="tag-list">
+            <span v-for="tag in item.tags_json" :key="`${item.id}-${tag}`" class="tag-chip">{{ tag }}</span>
+            <span v-if="!item.tags_json.length" class="tag-chip muted">无标签</span>
+          </div>
+        </article>
+      </div>
 
-        <div class="meta-line">
-          <span>label: {{ item.label_key || '--' }}</span>
-          <span>crop: {{ item.crop_name || '--' }}</span>
-          <span>family: {{ item.disease_family || '--' }}</span>
-        </div>
-
-        <div class="tag-list">
-          <span v-for="tag in item.tags_json" :key="`${item.id}-${tag}`" class="tag-chip">{{ tag }}</span>
-          <span v-if="!item.tags_json.length" class="tag-chip muted">无标签</span>
-        </div>
-      </article>
+      <div v-if="knowledgeList.length > pageSize" class="pager-row">
+        <button class="text-btn" :disabled="currentPage <= 1" @click="currentPage -= 1">上一页</button>
+        <span class="pager-text">第 {{ currentPage }} / {{ totalPages }} 页</span>
+        <button class="text-btn" :disabled="currentPage >= totalPages" @click="currentPage += 1">下一页</button>
+      </div>
     </section>
   </div>
 </template>
@@ -209,6 +249,8 @@ const submitting = ref(false)
 const deletingId = ref<number | null>(null)
 const editingId = ref<number | null>(null)
 const knowledgeList = ref<KnowledgeItem[]>([])
+const currentPage = ref(1)
+const pageSize = 8
 
 const filters = reactive({
   keyword: '',
@@ -233,6 +275,11 @@ const form = reactive({
 
 const healthyCount = computed(() => knowledgeList.value.filter((item) => item.health_status === 'healthy').length)
 const diseasedCount = computed(() => knowledgeList.value.filter((item) => item.health_status === 'diseased').length)
+const totalPages = computed(() => Math.max(1, Math.ceil(knowledgeList.value.length / pageSize)))
+const pagedKnowledgeList = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return knowledgeList.value.slice(start, start + pageSize)
+})
 
 function formatDate(value?: string) {
   if (!value) return '--'
@@ -270,6 +317,11 @@ function resetForm() {
   form.tagsText = ''
 }
 
+function setHealthFilter(status: string) {
+  filters.health_status = status
+  fetchKnowledgeList()
+}
+
 function editItem(item: KnowledgeItem) {
   editingId.value = item.id
   form.label_key = item.label_key || ''
@@ -296,8 +348,10 @@ async function fetchKnowledgeList() {
       limit: 1000,
     })
     knowledgeList.value = Array.isArray(res.data) ? res.data : []
+    currentPage.value = 1
   } catch {
     knowledgeList.value = []
+    currentPage.value = 1
   } finally {
     loading.value = false
   }
@@ -358,9 +412,9 @@ onMounted(fetchKnowledgeList)
 
 <style scoped>
 .knowledge-page {
-  max-width: 1140px;
+  max-width: 1040px;
   margin: 0 auto;
-  padding: 32px 24px 40px;
+  padding: 24px 20px 36px;
 }
 
 .page-hero {
@@ -403,6 +457,9 @@ onMounted(fetchKnowledgeList)
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   margin: 18px 0 22px;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .summary-card {
@@ -428,15 +485,27 @@ onMounted(fetchKnowledgeList)
 }
 
 .panel-shell {
-  padding: 20px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.82);
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.86);
   border: 1px solid var(--card-border);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 12px 26px rgba(57, 31, 44, 0.06);
 }
 
 .panel-shell + .panel-shell {
   margin-top: 16px;
+}
+
+.editor-shell {
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.filter-shell {
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .panel-head h3 {
@@ -450,12 +519,44 @@ onMounted(fetchKnowledgeList)
   color: var(--text-muted);
 }
 
+.quick-filters {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quick-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.chip-btn {
+  border: 1px solid #d8c9d2;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.88);
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.chip-btn.active {
+  background: rgba(47, 141, 111, 0.12);
+  border-color: rgba(47, 141, 111, 0.45);
+  color: #1b6a55;
+}
+
 .filter-grid,
 .form-grid {
   margin-top: 14px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(180px, 300px));
   gap: 12px;
+  justify-content: start;
 }
 
 label {
@@ -474,9 +575,10 @@ input,
 select,
 textarea {
   width: 100%;
+  box-sizing: border-box;
   border: 1px solid #dfd5dc;
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   font-family: inherit;
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.85);
@@ -488,6 +590,12 @@ textarea {
 
 .full-line {
   margin-top: 12px;
+  max-width: 560px;
+}
+
+.full-line input,
+.full-line textarea {
+  max-width: 560px;
 }
 
 .action-row {
@@ -495,6 +603,7 @@ textarea {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .ghost-btn,
@@ -506,24 +615,28 @@ textarea {
   font-family: inherit;
   font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .ghost-btn {
   padding: 10px 14px;
   background: var(--lavender-light);
   color: var(--text-primary);
+  min-width: 88px;
 }
 
 .save-btn {
   padding: 11px 16px;
   background: linear-gradient(135deg, #2f8d6f, #4e9d85);
   color: #fff;
+  min-width: 110px;
 }
 
 .text-btn {
   padding: 11px 14px;
   background: rgba(247, 243, 246, 0.8);
   color: var(--text-secondary);
+  min-width: 88px;
 }
 
 .ghost-btn:disabled,
@@ -536,6 +649,16 @@ textarea {
 
 .list-shell {
   margin-top: 16px;
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
 }
 
 .empty-state {
@@ -549,10 +672,9 @@ textarea {
   border-radius: 16px;
   border: 1px solid rgba(229, 220, 226, 0.9);
   background: rgba(255, 255, 255, 0.78);
-}
-
-.knowledge-item + .knowledge-item {
-  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .item-header {
@@ -575,6 +697,21 @@ textarea {
   white-space: pre-wrap;
 }
 
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.meta-pill {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(236, 242, 239, 0.9);
+  color: #215a4a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .meta-line {
   display: flex;
   flex-wrap: wrap;
@@ -586,12 +723,15 @@ textarea {
 .item-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .mini-btn {
   padding: 8px 12px;
   background: rgba(243, 236, 241, 0.8);
   color: var(--text-primary);
+  min-width: 64px;
 }
 
 .mini-btn.danger {
@@ -620,6 +760,21 @@ textarea {
   color: var(--text-muted);
 }
 
+.pager-row {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.pager-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 88px;
+  text-align: center;
+}
+
 @media (max-width: 900px) {
   .summary-grid {
     grid-template-columns: 1fr;
@@ -628,6 +783,18 @@ textarea {
   .page-hero {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .filter-grid,
+  .form-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .filter-shell,
+  .editor-shell,
+  .list-shell,
+  .summary-grid {
+    max-width: 100%;
   }
 }
 </style>

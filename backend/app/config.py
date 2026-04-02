@@ -33,9 +33,7 @@ class Settings(BaseSettings):
     # --- 推理 ---
     TOP_K: int = 5
     MAX_TOP_K: int = 20
-    MAX_BATCH_SIZE: int = 10
     MAX_UPLOAD_SIZE_MB: int = 10
-    MAX_BATCH_TOTAL_SIZE_MB: int = 30
     UPLOAD_CHUNK_SIZE: int = 1024 * 1024
     DIAGNOSIS_EVIDENCE_LIMIT: int = 4
     SIMILAR_CASE_LIMIT: int = 3
@@ -81,10 +79,6 @@ class Settings(BaseSettings):
     @property
     def max_upload_size_bytes(self) -> int:
         return self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
-
-    @property
-    def max_batch_total_size_bytes(self) -> int:
-        return self.MAX_BATCH_TOTAL_SIZE_MB * 1024 * 1024
 
     model_config = {
         "env_file": [

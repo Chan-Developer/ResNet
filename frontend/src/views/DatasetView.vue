@@ -5,7 +5,7 @@
       <div class="header-icon">库</div>
       <div>
         <h2>数据集浏览</h2>
-        <p class="header-desc">探索 38 种植物病害类别，共计数万张样本图片</p>
+        <p class="header-desc">探索 38 种农作物病害类别，共计数万张样本图片</p>
       </div>
     </div>
 

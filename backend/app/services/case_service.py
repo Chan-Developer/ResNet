@@ -209,6 +209,8 @@ async def create_case_from_draft(
         await db.flush()
 
         normalized_province = alert_service.normalize_region_text(province)
+        if normalized_province not in VALID_REGION_CODES:
+            raise bad_request("请选择有效区域（区域1~区域5）")
         normalized_city = alert_service.normalize_region_text(city)
         normalized_district = alert_service.normalize_region_text(district)
         region_code = alert_service.build_region_code(
@@ -269,3 +271,4 @@ async def get_case(db: AsyncSession, case_id: int, user_id: int) -> CaseOut:
     if case is None:
         raise not_found("病例不存在")
     return _case_to_schema(case)
+VALID_REGION_CODES = {"区域1", "区域2", "区域3", "区域4", "区域5"}

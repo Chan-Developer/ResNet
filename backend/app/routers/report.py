@@ -30,6 +30,7 @@ async def get_overview(
     scope: str = report_service.SCOPE_ME,
     crop_name: str | None = None,
     label: str | None = None,
+    region_code: str | None = None,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -40,6 +41,7 @@ async def get_overview(
         scope=scope,
         crop_name=crop_name,
         label=label,
+        region_code=region_code,
     )
     return ApiResponse(data=overview)
 
@@ -63,6 +65,7 @@ async def export_report_csv(
     scope: str = report_service.SCOPE_ME,
     crop_name: str | None = None,
     label: str | None = None,
+    region_code: str | None = None,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -73,6 +76,7 @@ async def export_report_csv(
         scope=scope,
         crop_name=crop_name,
         label=label,
+        region_code=region_code,
     )
     stream = io.StringIO()
     writer = csv.writer(stream)
@@ -95,6 +99,7 @@ async def export_report_xlsx(
     scope: str = report_service.SCOPE_ME,
     crop_name: str | None = None,
     label: str | None = None,
+    region_code: str | None = None,
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
@@ -105,6 +110,7 @@ async def export_report_xlsx(
         scope=scope,
         crop_name=crop_name,
         label=label,
+        region_code=region_code,
     )
     rows = report_service.to_report_rows(overview)
     xlsx_bytes = report_service.build_xlsx_bytes(rows)

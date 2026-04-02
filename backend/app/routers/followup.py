@@ -74,6 +74,16 @@ async def update_plan(
     return ApiResponse(data=plan)
 
 
+@router.delete("/plans/{plan_id}", response_model=ApiResponse[dict[str, bool]])
+async def delete_plan(
+    plan_id: int,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_permissions("followup:manage")),
+):
+    await followup_service.delete_followup_plan(db, user_id=user.id, plan_id=plan_id)
+    return ApiResponse(data={"deleted": True})
+
+
 @router.get("/plans/{plan_id}/checkins", response_model=ApiResponse[list[FollowUpCheckinOut]])
 async def list_checkins(
     plan_id: int,

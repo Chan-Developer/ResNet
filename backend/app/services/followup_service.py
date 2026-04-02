@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from typing import Any, Optional
 from urllib import error, request
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
@@ -87,14 +87,12 @@ def _infer_effect_status(
 
 
 def _fallback_change_summary(payload: dict[str, Any]) -> str:
-    previous = payload["previous_target_confidence"] * 100
-    current = payload["target_confidence"] * 100
     delta = payload["target_confidence_delta"] * 100
     sign = "+" if delta >= 0 else ""
     return (
         f"本次复查识别结果为 {payload['top1_display_name']}，目标病情标签为 "
-        f"{payload['target_display_name']}。目标置信度由 {previous:.1f}% 变为 "
-        f"{current:.1f}%（{sign}{delta:.1f}%），系统评估为「{payload['effect_status_text']}」。"
+        f"{payload['target_display_name']}。病害变化：{sign}{delta:.1f}%，"
+        f"康复情况：{payload['recovery_text']}，系统评估为「{payload['effect_status_text']}」。"
     )
 
 
@@ -103,7 +101,8 @@ def _call_openai_change_summary(payload: dict[str, Any]) -> Optional[str]:
         return None
     prompt = (
         "你是农业复查分析助手。请根据输入输出 JSON："
-        "{\"summary\":\"...\"}。summary 需要中文、简洁、包含变化趋势与建议。"
+        "{\"summary\":\"...\"}。summary 需要中文、简洁、包含病害变化与康复情况。"
+        "不要写“目标置信度由A变为B”这种句式。"
     )
     body = {
         "model": settings.OPENAI_MODEL,
@@ -349,6 +348,19 @@ async def get_followup_plan(
     )
 
 
+async def delete_followup_plan(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    plan_id: int,
+) -> bool:
+    plan = await _get_owned_plan(db, user_id=user_id, plan_id=plan_id)
+    await db.execute(delete(FollowUpCheckin).where(FollowUpCheckin.plan_id == plan.id))
+    await db.delete(plan)
+    await db.commit()
+    return True
+
+
 async def update_followup_plan(
     db: AsyncSession,
     *,
@@ -448,6 +460,13 @@ async def create_followup_checkin_from_prediction(
         if effect_status == EFFECT_STATUS_WORSE
         else "稳定"
     )
+    recovery_text = (
+        "恢复中"
+        if effect_status == EFFECT_STATUS_IMPROVED
+        else "出现恶化"
+        if effect_status == EFFECT_STATUS_WORSE
+        else "病情持平"
+    )
     llm_payload = {
         "plan_title": plan.title,
         "target_label": plan.target_label,
@@ -461,6 +480,7 @@ async def create_followup_checkin_from_prediction(
         "top1_confidence_delta": top1_delta,
         "effect_status": effect_status,
         "effect_status_text": effect_status_text,
+        "recovery_text": recovery_text,
         "note": _strip_text(note) or "",
     }
     llm_summary = await _generate_change_summary(llm_payload)

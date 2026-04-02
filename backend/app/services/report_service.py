@@ -7,13 +7,14 @@ import io
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.case import DiseaseCase
+from ..models.case import DiseaseCase, RegionAlert
 from ..models.prediction import PredictionRecord
 from ..schemas.report import (
     DashboardFilterOptionsOut,
     DashboardOverviewOut,
     DashboardSummary,
     DiseaseDistributionItem,
+    RegionDistributionItem,
     TrendPoint,
 )
 from ..utils.class_names import to_display_name
@@ -84,6 +85,7 @@ def to_report_rows(overview: DashboardOverviewOut) -> list[list[str | int]]:
         ["结束日期", overview.summary.end_date],
         ["作物筛选", overview.summary.crop_name or "全部"],
         ["病害筛选", overview.summary.label or "全部"],
+        ["地区筛选", overview.summary.region_code or "全部"],
         ["识别总数", overview.summary.prediction_count],
         ["确认建档数", overview.summary.confirmed_count],
         [
@@ -101,6 +103,20 @@ def to_report_rows(overview: DashboardOverviewOut) -> list[list[str | int]]:
     for item in overview.distribution:
         rows.append([item.label, item.display_name, item.count, f"{item.ratio * 100:.2f}%"])
     rows.append([])
+    if overview.region_distribution:
+        rows.append(["区域预警分布"])
+        rows.append(["区域", "病例数量", "占比", "有无预警", "有无未读预警"])
+        for region in overview.region_distribution:
+            rows.append(
+                [
+                    region.region_code,
+                    region.total_count,
+                    f"{region.ratio * 100:.2f}%",
+                    "有" if region.has_alert else "无",
+                    "有" if region.has_unread_alert else "无",
+                ]
+            )
+        rows.append([])
     rows.append(["趋势变化"])
     rows.append(["日期", "识别量", "建档量", "准确率"])
     rows.extend([_point_row(item) for item in overview.trend])
@@ -194,8 +210,10 @@ async def get_dashboard_filter_options(
 
     crop_query = select(DiseaseCase.crop_name).where(*case_filters).group_by(DiseaseCase.crop_name)
     label_query = select(DiseaseCase.confirmed_label).where(*case_filters).group_by(DiseaseCase.confirmed_label)
+    region_query = select(DiseaseCase.region_code).where(*case_filters).group_by(DiseaseCase.region_code)
     crops_result = await db.execute(crop_query)
     labels_result = await db.execute(label_query)
+    regions_result = await db.execute(region_query)
 
     crops = sorted(
         [str(item[0]) for item in crops_result.all() if item[0] is not None and str(item[0]).strip()]
@@ -203,9 +221,13 @@ async def get_dashboard_filter_options(
     labels = sorted(
         [str(item[0]) for item in labels_result.all() if item[0] is not None and str(item[0]).strip()]
     )
+    regions = sorted(
+        [str(item[0]) for item in regions_result.all() if item[0] is not None and str(item[0]).strip()]
+    )
     return DashboardFilterOptionsOut(
         crops=crops,
         labels=[{"label": label, "display_name": to_display_name(label)} for label in labels],
+        regions=regions,
     )
 
 
@@ -216,12 +238,14 @@ async def get_dashboard_overview(
     days: int = 30,
     crop_name: str | None = None,
     label: str | None = None,
+    region_code: str | None = None,
     scope: str = SCOPE_ME,
 ) -> DashboardOverviewOut:
     days = _validate_days(days)
     scope = _normalize_scope(scope)
     crop_name = _normalize_optional_text(crop_name)
     label = _normalize_optional_text(label)
+    region_code = _normalize_optional_text(region_code)
 
     end_day = date.today()
     start_day = end_day - timedelta(days=days - 1)
@@ -245,16 +269,39 @@ async def get_dashboard_overview(
         case_filters.append(DiseaseCase.confirmed_label == label)
     if crop_name:
         case_filters.append(DiseaseCase.crop_name == crop_name)
+    if region_code:
+        case_filters.append(DiseaseCase.region_code == region_code)
 
-    prediction_count = int(
-        await db.scalar(
-            select(func.count()).select_from(PredictionRecord).where(*prediction_filters)
+    if region_code:
+        prediction_query = (
+            select(func.count(func.distinct(PredictionRecord.id)))
+            .select_from(PredictionRecord)
+            .join(DiseaseCase, DiseaseCase.prediction_record_id == PredictionRecord.id)
+            .where(*case_filters)
         )
-        or 0
-    )
-    avg_confidence_raw = await db.scalar(
-        select(func.avg(PredictionRecord.top1_confidence)).where(*prediction_filters)
-    )
+        if label:
+            prediction_query = prediction_query.where(PredictionRecord.top1_class == label)
+        prediction_count = int(await db.scalar(prediction_query) or 0)
+
+        avg_confidence_query = (
+            select(func.avg(PredictionRecord.top1_confidence))
+            .select_from(PredictionRecord)
+            .join(DiseaseCase, DiseaseCase.prediction_record_id == PredictionRecord.id)
+            .where(*case_filters)
+        )
+        if label:
+            avg_confidence_query = avg_confidence_query.where(PredictionRecord.top1_class == label)
+        avg_confidence_raw = await db.scalar(avg_confidence_query)
+    else:
+        prediction_count = int(
+            await db.scalar(
+                select(func.count()).select_from(PredictionRecord).where(*prediction_filters)
+            )
+            or 0
+        )
+        avg_confidence_raw = await db.scalar(
+            select(func.avg(PredictionRecord.top1_confidence)).where(*prediction_filters)
+        )
     avg_confidence = round(float(avg_confidence_raw), 4) if avg_confidence_raw is not None else None
 
     confirmed_count = int(
@@ -290,12 +337,25 @@ async def get_dashboard_overview(
         for confirmed_label, count in distribution_rows.all()
     ]
 
-    prediction_rows = await db.execute(
-        select(func.date(PredictionRecord.created_at).label("d"), func.count().label("count"))
-        .where(*prediction_filters)
-        .group_by("d")
-        .order_by("d")
-    )
+    if region_code:
+        prediction_rows_query = (
+            select(func.date(DiseaseCase.created_at).label("d"), func.count().label("count"))
+            .select_from(PredictionRecord)
+            .join(DiseaseCase, DiseaseCase.prediction_record_id == PredictionRecord.id)
+            .where(*case_filters)
+            .group_by("d")
+            .order_by("d")
+        )
+        if label:
+            prediction_rows_query = prediction_rows_query.where(PredictionRecord.top1_class == label)
+        prediction_rows = await db.execute(prediction_rows_query)
+    else:
+        prediction_rows = await db.execute(
+            select(func.date(PredictionRecord.created_at).label("d"), func.count().label("count"))
+            .where(*prediction_filters)
+            .group_by("d")
+            .order_by("d")
+        )
     predictions_by_day = {_date_text(row[0]): int(row[1]) for row in prediction_rows.all()}
 
     confirmed_rows = await db.execute(
@@ -330,6 +390,42 @@ async def get_dashboard_overview(
             )
         )
 
+    region_distribution: list[RegionDistributionItem] = []
+    region_rows = await db.execute(
+        select(DiseaseCase.region_code, func.count().label("count"))
+        .where(*case_filters)
+        .group_by(DiseaseCase.region_code)
+        .order_by(desc("count"))
+        .limit(8)
+    )
+    top_regions = [(row[0], int(row[1])) for row in region_rows.all()]
+
+    for region_code, region_count in top_regions:
+        alert_total = int(
+            await db.scalar(
+                select(func.count()).select_from(RegionAlert).where(RegionAlert.region_code == region_code)
+            )
+            or 0
+        )
+        alert_unread = int(
+            await db.scalar(
+                select(func.count())
+                .select_from(RegionAlert)
+                .where(RegionAlert.region_code == region_code, RegionAlert.status == "unread")
+            )
+            or 0
+        )
+
+        region_distribution.append(
+            RegionDistributionItem(
+                region_code=region_code,
+                total_count=region_count,
+                ratio=_safe_ratio(region_count, confirmed_count),
+                has_alert=alert_total > 0,
+                has_unread_alert=alert_unread > 0,
+            )
+        )
+
     return DashboardOverviewOut(
         summary=DashboardSummary(
             scope=scope,
@@ -338,6 +434,7 @@ async def get_dashboard_overview(
             end_date=end_day.isoformat(),
             crop_name=crop_name,
             label=label,
+            region_code=region_code,
             prediction_count=prediction_count,
             confirmed_count=confirmed_count,
             avg_confidence=avg_confidence,
@@ -345,4 +442,5 @@ async def get_dashboard_overview(
         ),
         distribution=distribution,
         trend=trend,
+        region_distribution=region_distribution,
     )

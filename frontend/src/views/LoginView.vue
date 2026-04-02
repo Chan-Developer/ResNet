@@ -10,8 +10,8 @@
     <div class="login-card">
       <div class="card-header">
         <div class="brand-icon">PC</div>
-        <h2 class="brand-title">PlantCare</h2>
-        <p class="brand-sub">智能植物病害识别系统</p>
+        <h2 class="brand-title">农作慧诊</h2>
+        <p class="brand-sub">智能农作物病害识别系统</p>
       </div>
 
       <div class="tab-bar">

@@ -2,7 +2,7 @@
   <div class="followup-page">
     <section class="followup-hero">
       <div>
-        <div class="hero-kicker">Follow-up Workflow</div>
+        <div class="hero-kicker">复查工作流</div>
         <h2>复查计划与疗效评估</h2>
         <p class="hero-desc">创建复查计划，定期上传复查图片，系统自动比较历史变化并生成分析说明。</p>
       </div>
@@ -17,14 +17,14 @@
         <label class="field-label">计划名称</label>
         <input v-model="createForm.title" class="field-input" placeholder="例如：番茄晚疫病一周复查" />
 
-        <label class="field-label">关联病例 ID（可选）</label>
+        <label class="field-label">关联病例编号（可选）</label>
         <input v-model="createForm.caseIdText" class="field-input" placeholder="例如：1024" />
 
-        <label class="field-label">目标标签（可选）</label>
+        <label class="field-label">病害类型（可选）</label>
         <input
           v-model="createForm.targetLabel"
           class="field-input"
-          placeholder="不填则自动使用最近一次建档病例标签"
+          placeholder="不填则自动使用最近一次建档病例病害类型"
         />
 
         <label class="field-label">复查频率（天）</label>
@@ -62,7 +62,7 @@
               <strong>{{ plan.title }}</strong>
               <span class="status-pill" :class="plan.status">{{ statusText(plan.status) }}</span>
             </div>
-            <div class="plan-meta">目标：{{ plan.target_display_name }}</div>
+            <div class="plan-meta">病害类型：{{ plan.target_display_name }}</div>
             <div class="plan-meta">下次复查：{{ plan.next_review_date }}</div>
             <div class="plan-meta">最近效果：{{ effectText(plan.latest_effect) }}</div>
           </button>
@@ -74,16 +74,21 @@
       <article class="panel detail-panel">
         <div class="panel-head">
           <h3>计划详情</h3>
-          <select
-            v-model="selectedPlanStatus"
-            class="status-filter"
-            @change="handleUpdatePlanStatus"
-          >
-            <option value="active">进行中</option>
-            <option value="paused">已暂停</option>
-            <option value="completed">已完成</option>
-            <option value="cancelled">已取消</option>
-          </select>
+          <div class="panel-actions">
+            <select
+              v-model="selectedPlanStatus"
+              class="status-filter"
+              @change="handleUpdatePlanStatus"
+            >
+              <option value="active">进行中</option>
+              <option value="paused">已暂停</option>
+              <option value="completed">已完成</option>
+              <option value="cancelled">已取消</option>
+            </select>
+            <button class="danger-btn" :disabled="deletingPlan" @click="handleDeletePlan">
+              {{ deletingPlan ? '删除中...' : '删除计划' }}
+            </button>
+          </div>
         </div>
         <div class="summary-grid">
           <div class="summary-card">
@@ -105,8 +110,6 @@
         </div>
         <div class="meta-list">
           <div>当前效果：{{ effectText(evaluation.latest_effect) }}</div>
-          <div>效果评分：{{ toPercent(evaluation.effect_score) }}</div>
-          <div>平均目标置信度变化：{{ signedPercent(evaluation.avg_target_confidence_delta) }}</div>
         </div>
       </article>
 
@@ -131,9 +134,9 @@
             <span class="status-pill" :class="item.effect_status">{{ effectText(item.effect_status) }}</span>
           </div>
           <div class="checkin-meta">
-            <span>Top1 置信度：{{ toPercent(item.top1_confidence) }}</span>
-            <span>目标置信度：{{ toPercent(item.target_confidence) }}</span>
-            <span>目标变化：{{ signedPercent(item.target_confidence_delta) }}</span>
+            <span>首位置信度：{{ toPercent(item.top1_confidence) }}</span>
+            <span>病害变化：{{ signedPercent(item.target_confidence_delta) }}</span>
+            <span>康复情况：{{ recoveryText(item.effect_status) }}</span>
             <span>{{ formatDate(item.created_at) }}</span>
           </div>
           <p class="checkin-summary">{{ item.llm_summary }}</p>
@@ -148,6 +151,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   createFollowupPlan,
+  deleteFollowupPlan,
   getFollowupEvaluation,
   listFollowupCheckins,
   listFollowupPlans,
@@ -191,6 +195,7 @@ const loadingPlans = ref(false)
 const loadingCheckins = ref(false)
 const creatingPlan = ref(false)
 const uploading = ref(false)
+const deletingPlan = ref(false)
 const statusFilter = ref<string>('')
 const selectedPlanId = ref<number>(0)
 const selectedPlanStatus = ref<FollowupPlanStatus>('active')
@@ -215,6 +220,16 @@ const createForm = reactive({
 })
 
 const selectedPlan = computed(() => plans.value.find((item) => item.id === selectedPlanId.value) || null)
+
+function dedupeById<T extends { id: number }>(items: T[]) {
+  const map = new Map<number, T>()
+  for (const item of items) {
+    if (!map.has(item.id)) {
+      map.set(item.id, item)
+    }
+  }
+  return Array.from(map.values())
+}
 
 function toPercent(value?: number) {
   if (typeof value !== 'number') return '--'
@@ -242,6 +257,13 @@ function effectText(status: string) {
   return '待评估'
 }
 
+function recoveryText(status: string) {
+  if (status === 'improved') return '恢复中'
+  if (status === 'worse') return '出现恶化'
+  if (status === 'stable') return '病情持平'
+  return '待评估'
+}
+
 function formatDate(value?: string) {
   if (!value) return '--'
   const date = new Date(value)
@@ -252,7 +274,7 @@ async function fetchPlans() {
   loadingPlans.value = true
   try {
     const res: any = await listFollowupPlans(statusFilter.value ? { status: statusFilter.value as FollowupPlanStatus } : {})
-    plans.value = Array.isArray(res.data) ? res.data : []
+    plans.value = dedupeById(Array.isArray(res.data) ? res.data : [])
     if (!plans.value.length) {
       selectedPlanId.value = 0
       checkins.value = []
@@ -282,7 +304,7 @@ async function fetchPlanDetail() {
       listFollowupCheckins(selectedPlanId.value, { limit: 50 }),
       getFollowupEvaluation(selectedPlanId.value),
     ])
-    checkins.value = Array.isArray(checkinRes.data) ? checkinRes.data : []
+    checkins.value = dedupeById(Array.isArray(checkinRes.data) ? checkinRes.data : [])
     evaluation.value = evalRes.data || evaluation.value
     selectedPlanStatus.value = selectedPlan.value?.status || 'active'
   } finally {
@@ -363,6 +385,33 @@ async function handleUpdatePlanStatus() {
   ElMessage.success('计划状态已更新')
   await fetchPlans()
   await fetchPlanDetail()
+}
+
+async function handleDeletePlan() {
+  if (!selectedPlanId.value) return
+  const confirmed = window.confirm('确定要删除该复查计划吗？相关复查记录也会一起删除。')
+  if (!confirmed) return
+  deletingPlan.value = true
+  try {
+    await deleteFollowupPlan(selectedPlanId.value)
+    ElMessage.success('复查计划已删除')
+    selectedPlanId.value = 0
+    await fetchPlans()
+    if (selectedPlanId.value) {
+      await fetchPlanDetail()
+    } else {
+      checkins.value = []
+      evaluation.value = {
+        total_checkins: 0,
+        improved_count: 0,
+        stable_count: 0,
+        worse_count: 0,
+        latest_effect: 'unknown',
+      }
+    }
+  } finally {
+    deletingPlan.value = false
+  }
 }
 
 onMounted(refreshAll)
@@ -493,6 +542,12 @@ onMounted(refreshAll)
   gap: 10px;
 }
 
+.panel-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .status-filter {
   border: 1px solid #e0d2da;
   border-radius: 10px;
@@ -501,10 +556,24 @@ onMounted(refreshAll)
   color: var(--text-primary);
 }
 
+.danger-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  background: rgba(254, 226, 226, 0.9);
+  color: #b91c1c;
+}
+
 .plan-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .plan-item {
@@ -611,6 +680,9 @@ onMounted(refreshAll)
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 560px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .checkin-item {

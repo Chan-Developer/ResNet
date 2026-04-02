@@ -6,10 +6,6 @@ from ..schemas.admin_manage import (
     KnowledgeChunkCreate,
     KnowledgeChunkManageInfo,
     KnowledgeChunkUpdate,
-    ModelRuntimeInfo,
-    ModelVersionCreate,
-    ModelVersionInfo,
-    ModelVersionUpdate,
 )
 from ..schemas.common import ApiResponse
 from ..schemas.user import (
@@ -19,7 +15,7 @@ from ..schemas.user import (
     UserManageInfo,
     UserManageUpdate,
 )
-from ..services import admin_service, knowledge_service, model_registry_service, rbac_service
+from ..services import admin_service, knowledge_service, rbac_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -165,62 +161,3 @@ async def delete_knowledge_chunk(
 ):
     await knowledge_service.delete_knowledge_chunk(db, chunk_id)
     return ApiResponse(data={"deleted": True})
-
-
-@router.get("/model-versions", response_model=ApiResponse[list[ModelVersionInfo]])
-async def list_model_versions(
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_permissions("admin:model")),
-):
-    versions = await model_registry_service.list_model_versions(db)
-    return ApiResponse(data=[ModelVersionInfo(**item) for item in versions])
-
-
-@router.post("/model-versions", response_model=ApiResponse[ModelVersionInfo])
-async def create_model_version(
-    payload: ModelVersionCreate,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_permissions("admin:model")),
-):
-    item = await model_registry_service.create_model_version(db, payload)
-    return ApiResponse(data=ModelVersionInfo(**item))
-
-
-@router.patch("/model-versions/{version_id}", response_model=ApiResponse[ModelVersionInfo])
-async def update_model_version(
-    version_id: int,
-    payload: ModelVersionUpdate,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_permissions("admin:model")),
-):
-    item = await model_registry_service.update_model_version(db, version_id, payload)
-    return ApiResponse(data=ModelVersionInfo(**item))
-
-
-@router.delete("/model-versions/{version_id}", response_model=ApiResponse[dict[str, bool]])
-async def delete_model_version(
-    version_id: int,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_permissions("admin:model")),
-):
-    await model_registry_service.delete_model_version(db, version_id)
-    return ApiResponse(data={"deleted": True})
-
-
-@router.post("/model-versions/{version_id}/activate", response_model=ApiResponse[ModelVersionInfo])
-async def activate_model_version(
-    version_id: int,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_permissions("admin:model")),
-):
-    item = await model_registry_service.activate_model_version(db, version_id)
-    return ApiResponse(data=ModelVersionInfo(**item))
-
-
-@router.get("/model-versions/runtime", response_model=ApiResponse[ModelRuntimeInfo])
-async def get_model_runtime_info(
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_permissions("admin:model")),
-):
-    runtime = await model_registry_service.get_model_runtime_info(db)
-    return ApiResponse(data=ModelRuntimeInfo(**runtime))

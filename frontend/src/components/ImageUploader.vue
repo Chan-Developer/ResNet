@@ -12,8 +12,9 @@
       accept="image/*"
       drag
       class="cute-upload"
+      :class="{ 'hide-trigger': shouldHideTrigger }"
     >
-      <div class="upload-inner">
+      <div v-if="!shouldHideTrigger" class="upload-inner">
         <span class="upload-icon">+</span>
         <span class="upload-text">点击或拖拽上传</span>
       </div>
@@ -27,16 +28,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { UploadFile, UploadFiles } from 'element-plus'
 
 const props = withDefaults(defineProps<{
   multiple?: boolean
   limit?: number
+  hideTriggerWhenHasFile?: boolean
 }>(), {
   multiple: false,
   limit: 1,
+  hideTriggerWhenHasFile: true,
 })
 
 const emit = defineEmits<{
@@ -44,6 +47,21 @@ const emit = defineEmits<{
 }>()
 
 const fileList = ref<UploadFile[]>([])
+const showTrigger = ref(true)
+let revealTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearRevealTimer() {
+  if (revealTimer) {
+    clearTimeout(revealTimer)
+    revealTimer = null
+  }
+}
+
+const shouldHideTrigger = computed(() => {
+  if (!props.hideTriggerWhenHasFile) return false
+  if (fileList.value.length >= props.limit) return true
+  return !showTrigger.value
+})
 
 watch(
   () => [props.multiple, props.limit],
@@ -59,6 +77,32 @@ watch(
       fileList.value = nextFiles
       emitFiles()
     }
+  },
+)
+
+watch(
+  () => fileList.value.length,
+  (nextLen, prevLen) => {
+    if (!props.hideTriggerWhenHasFile) {
+      showTrigger.value = true
+      clearRevealTimer()
+      return
+    }
+    if (nextLen >= props.limit) {
+      clearRevealTimer()
+      showTrigger.value = false
+      return
+    }
+    if (prevLen > 0 && nextLen === 0) {
+      clearRevealTimer()
+      showTrigger.value = false
+      revealTimer = setTimeout(() => {
+        showTrigger.value = true
+        revealTimer = null
+      }, 380)
+      return
+    }
+    showTrigger.value = true
   },
 )
 
@@ -86,6 +130,10 @@ function emitFiles() {
     .filter(Boolean) as File[]
   emit('change', raw)
 }
+
+onBeforeUnmount(() => {
+  clearRevealTimer()
+})
 </script>
 
 <style scoped>
@@ -101,6 +149,10 @@ function emitFiles() {
   width: 100%;
   height: 168px;
   border-radius: var(--radius-md);
+}
+
+.cute-upload.hide-trigger :deep(.el-upload--picture-card) {
+  display: none;
 }
 
 .cute-upload :deep(.el-upload-dragger) {

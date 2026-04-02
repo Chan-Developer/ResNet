@@ -24,6 +24,10 @@ export function updateFollowupPlan(
   return request.patch(`/followup/plans/${planId}`, data)
 }
 
+export function deleteFollowupPlan(planId: number) {
+  return request.delete(`/followup/plans/${planId}`)
+}
+
 export function listFollowupCheckins(planId: number, params?: { limit?: number }) {
   return request.get(`/followup/plans/${planId}/checkins`, { params })
 }

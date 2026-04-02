@@ -75,6 +75,7 @@ class ReportServiceTestCase(unittest.IsolatedAsyncioTestCase):
                         diagnostic_summary="ok",
                         advice_json={},
                         evidence_json=[],
+                        region_code="区域1",
                         created_at=self.day2,
                     ),
                     DiseaseCase(
@@ -92,6 +93,7 @@ class ReportServiceTestCase(unittest.IsolatedAsyncioTestCase):
                         diagnostic_summary="bad",
                         advice_json={},
                         evidence_json=[],
+                        region_code="区域2",
                         created_at=self.day1,
                     ),
                     DiseaseCase(
@@ -109,6 +111,7 @@ class ReportServiceTestCase(unittest.IsolatedAsyncioTestCase):
                         diagnostic_summary="ok",
                         advice_json={},
                         evidence_json=[],
+                        region_code="区域1",
                         created_at=self.day1,
                     ),
                 ]
@@ -164,6 +167,34 @@ class ReportServiceTestCase(unittest.IsolatedAsyncioTestCase):
         labels = {item["label"] for item in options.labels}
         self.assertIn("Tomato___Early_blight", labels)
         self.assertIn("Tomato___Leaf_Mold", labels)
+        self.assertIn("区域1", options.regions)
+        self.assertIn("区域2", options.regions)
+
+    async def test_overview_filter_by_region(self):
+        async with self.Session() as db:
+            data = await report_service.get_dashboard_overview(
+                db,
+                user_id=1,
+                days=30,
+                scope="me",
+                region_code="区域1",
+            )
+        self.assertEqual(data.summary.region_code, "区域1")
+        self.assertEqual(data.summary.prediction_count, 1)
+        self.assertEqual(data.summary.confirmed_count, 1)
+        self.assertEqual(data.summary.accuracy, 1.0)
+
+    async def test_personal_overview_contains_region_distribution(self):
+        async with self.Session() as db:
+            data = await report_service.get_dashboard_overview(
+                db,
+                user_id=1,
+                days=30,
+                scope="me",
+            )
+        regions = {item.region_code for item in data.region_distribution}
+        self.assertIn("区域1", regions)
+        self.assertIn("区域2", regions)
 
     async def test_build_xlsx_bytes(self):
         async with self.Session() as db:

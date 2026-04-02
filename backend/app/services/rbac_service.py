@@ -9,7 +9,6 @@ from ..utils.errors import bad_request
 
 PERMISSION_CATALOG: list[dict[str, str]] = [
     {"code": "predict:single", "name": "单张识别", "description": "执行单张图片病害识别"},
-    {"code": "predict:batch", "name": "批量识别", "description": "执行批量图片病害识别"},
     {"code": "diagnosis:confirm", "name": "确认建档", "description": "确认诊断并写入病例库"},
     {"code": "followup:manage", "name": "复查管理", "description": "创建复查计划并上传复查图片"},
     {"code": "history:view", "name": "查看历史", "description": "查看个人识别历史记录"},
@@ -19,7 +18,6 @@ PERMISSION_CATALOG: list[dict[str, str]] = [
     {"code": "admin:role", "name": "角色权限管理", "description": "配置角色可用权限"},
     {"code": "admin:alert", "name": "区域预警管理", "description": "查看和处理区域病害增长预警"},
     {"code": "admin:knowledge", "name": "知识库管理", "description": "维护知识条目并控制诊断知识来源"},
-    {"code": "admin:model", "name": "模型版本管理", "description": "维护模型版本并切换在线推理模型"},
 ]
 
 ROLE_LABELS = {
@@ -34,7 +32,6 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_ADMIN: [item["code"] for item in PERMISSION_CATALOG],
     ROLE_EXPERT: [
         "predict:single",
-        "predict:batch",
         "diagnosis:confirm",
         "followup:manage",
         "history:view",

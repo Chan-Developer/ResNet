@@ -16,7 +16,7 @@
 
       <!-- Top-K list -->
       <div class="topk-list">
-        <div class="topk-title">Top {{ result?.top_k }} 候选</div>
+        <div class="topk-title">前 {{ result?.top_k }} 个候选</div>
         <div
           v-for="(item, idx) in result?.predictions"
           :key="item.class_index"

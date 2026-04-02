@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel
 
@@ -15,11 +15,6 @@ class PredictResponse(BaseModel):
     top_k: int
     predictions: List[PredictionItem]
     best_prediction: Optional[PredictionItem] = None
-
-
-class BatchPredictResponse(BaseModel):
-    results: List[PredictResponse]
-
 
 class HistoryOut(BaseModel):
     id: int
