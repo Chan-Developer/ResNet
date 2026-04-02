@@ -75,7 +75,7 @@
     <section class="chart-grid">
       <article class="chart-card chart-card-main">
         <div class="card-head">
-          <h3>区域识别量</h3>
+          <h3>区域病害量</h3>
           <span class="sub-text">{{ selectedRegionLabel }} · {{ summary?.start_date }} ~ {{ summary?.end_date }}</span>
         </div>
         <div class="region-picker-row">
@@ -84,17 +84,48 @@
           </el-select>
         </div>
         <div v-if="!distribution.length" class="empty">该区域暂无病害建档数据</div>
-        <div v-else class="dist-list">
-          <div v-for="item in distribution" :key="item.label" class="dist-item">
-            <div class="dist-top">
-              <span class="dist-name">{{ item.display_name }}</span>
-              <span class="dist-value">{{ item.count }} 例（{{ (item.ratio * 100).toFixed(1) }}%）</span>
-            </div>
-            <div class="dist-bar">
-              <div class="dist-fill" :style="{ width: `${Math.max(item.ratio * 100, 2)}%` }"></div>
-            </div>
+        <div v-else class="bar-wrap">
+          <div class="bar-scroll">
+            <svg viewBox="0 0 760 300" preserveAspectRatio="none" class="bar-chart" role="img" aria-label="区域病害量柱状图">
+              <defs>
+                <linearGradient id="diseaseBarGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#c4869b" />
+                  <stop offset="100%" stop-color="#a6667d" />
+                </linearGradient>
+              </defs>
+              <line x1="56" y1="24" x2="56" y2="246" class="axis-line" />
+              <line x1="56" y1="246" x2="720" y2="246" class="axis-line" />
+
+              <g v-for="tick in yTicks" :key="`tick-${tick.value}`">
+                <line
+                  x1="56"
+                  :y1="tick.y"
+                  x2="720"
+                  :y2="tick.y"
+                  class="grid-line"
+                />
+                <text x="48" :y="tick.y + 4" class="y-label">{{ tick.value }}</text>
+              </g>
+
+              <g v-for="bar in diseaseBars" :key="bar.label">
+                <rect
+                  :x="bar.x"
+                  :y="bar.y"
+                  :width="bar.width"
+                  :height="bar.height"
+                  rx="6"
+                  class="bar-rect"
+                />
+                <text :x="bar.x + bar.width / 2" :y="bar.y - 8" class="bar-value">{{ bar.value }}</text>
+                <text :x="bar.x + bar.width / 2" y="270" class="x-label">{{ bar.shortName }}</text>
+              </g>
+            </svg>
           </div>
-          <div class="dist-foot">病害类别数：{{ distribution.length }}</div>
+          <div class="bar-foot">
+            <span>病害类别数：{{ diseaseBarSource.length }}</span>
+            <span>总病例数：{{ diseaseTotalCount }}</span>
+            <span>峰值病例数：{{ diseasePeakCount }}</span>
+          </div>
         </div>
       </article>
 
@@ -193,6 +224,55 @@ function formatPercent(value?: number | null) {
   if (value === null || value === undefined) return '--'
   return `${(value * 100).toFixed(1)}%`
 }
+
+function shortDiseaseName(value: string) {
+  const text = value.trim()
+  if (text.length <= 8) return text
+  return `${text.slice(0, 8)}…`
+}
+
+const diseaseBarSource = computed(() => distribution.value.slice(0, 8))
+const diseasePeakCount = computed(() => Math.max(...diseaseBarSource.value.map((item) => item.count), 0))
+const diseaseTotalCount = computed(() => diseaseBarSource.value.reduce((sum, item) => sum + item.count, 0))
+const diseaseAxisMax = computed(() => {
+  const max = Math.max(diseasePeakCount.value, 1)
+  const step = Math.max(1, Math.ceil(max / 4))
+  return step * 4
+})
+
+const yTicks = computed(() => {
+  const axisMax = diseaseAxisMax.value
+  const step = axisMax / 4
+  const values = [0, step, step * 2, step * 3, step * 4]
+  return values.map((value) => {
+    const ratio = value / axisMax
+    const y = 246 - ratio * 198
+    return { value, y: Number(y.toFixed(2)) }
+  })
+})
+
+const diseaseBars = computed(() => {
+  const chartLeft = 72
+  const chartWidth = 632
+  const list = diseaseBarSource.value
+  const band = chartWidth / Math.max(list.length, 1)
+  const barWidth = Math.max(34, Math.min(64, band * 0.58))
+  const axisMax = diseaseAxisMax.value
+  return list.map((item, index) => {
+    const x = chartLeft + index * band + (band - barWidth) / 2
+    const height = (item.count / axisMax) * 198
+    const y = 246 - height
+    return {
+      label: item.label,
+      shortName: shortDiseaseName(item.display_name),
+      value: item.count,
+      x: Number(x.toFixed(2)),
+      y: Number(y.toFixed(2)),
+      width: Number(barWidth.toFixed(2)),
+      height: Number(height.toFixed(2)),
+    }
+  })
+})
 
 async function fetchData() {
   loading.value = true
@@ -456,52 +536,77 @@ onMounted(async () => {
   width: 160px;
 }
 
-.dist-list {
+.bar-wrap {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.dist-item {
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.64);
+.bar-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.bar-chart {
+  width: 100%;
+  min-width: 620px;
+  height: 280px;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(252, 247, 250, 0.7)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(214, 194, 203, 0.08) 0,
+      rgba(214, 194, 203, 0.08) 1px,
+      transparent 1px,
+      transparent 56px
+    );
   border: 1px solid rgba(232, 216, 223, 0.78);
 }
 
-.dist-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+.axis-line {
+  stroke: rgba(152, 131, 141, 0.8);
+  stroke-width: 1.2;
 }
 
-.dist-name {
-  font-size: 13px;
-  color: var(--text-primary);
+.grid-line {
+  stroke: rgba(199, 181, 190, 0.4);
+  stroke-width: 1;
+}
+
+.y-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+  text-anchor: end;
+}
+
+.bar-rect {
+  fill: url(#diseaseBarGradient);
+  stroke: rgba(166, 98, 120, 0.25);
+  stroke-width: 1;
+  filter: drop-shadow(0 3px 6px rgba(178, 106, 127, 0.2));
+}
+
+.bar-value {
+  font-size: 11px;
+  fill: var(--text-primary);
+  text-anchor: middle;
   font-weight: 700;
 }
 
-.dist-value {
+.x-label {
   font-size: 12px;
-  color: var(--text-muted);
+  fill: var(--text-secondary);
+  text-anchor: middle;
+  font-weight: 700;
 }
 
-.dist-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: #f1e9ee;
-  overflow: hidden;
-}
-
-.dist-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #b26a7f, #dba8b4);
-}
-
-.dist-foot {
+.bar-foot {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
   font-size: 12px;
   color: var(--text-muted);
 }
