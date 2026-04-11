@@ -26,6 +26,12 @@ const routes = [
     meta: { auth: true, permissions: ['predict:single'] },
   },
   {
+    path: '/consult',
+    name: 'Consult',
+    component: () => import('../views/DiseaseConsultView.vue'),
+    meta: { auth: true },
+  },
+  {
     path: '/history',
     name: 'History',
     component: () => import('../views/HistoryView.vue'),

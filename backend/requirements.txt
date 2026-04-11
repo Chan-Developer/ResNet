@@ -11,3 +11,4 @@ pydantic[email]
 python-jose[cryptography]
 bcrypt
 aiofiles
+volcengine-python-sdk[ark]>=4.0.6

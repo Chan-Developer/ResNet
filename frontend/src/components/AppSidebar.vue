@@ -54,6 +54,7 @@ const navItems = computed(() => {
   if (userStore.hasPermission('predict:single')) {
     baseItems.push({ path: '/predict', icon: '🌿', label: '农作物识别' })
   }
+  baseItems.push({ path: '/consult', icon: '💬', label: '病害咨询' })
   if (userStore.hasPermission('followup:manage')) {
     baseItems.push({ path: '/followup', icon: '🩺', label: '复查计划' })
   }

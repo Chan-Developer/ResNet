@@ -39,9 +39,11 @@ class Settings(BaseSettings):
     SIMILAR_CASE_LIMIT: int = 3
 
     # --- LLM ---
-    OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = "gpt-4.1-mini"
-    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    LLM_PROVIDER: str = "doubao"
+    ARK_API_KEY: Optional[str] = None
+    ARK_MODEL: str = "doubao-seed-1-8-251228"
+    ARK_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
+    LLM_TIMEOUT_SECONDS: int = 20
 
     @property
     def model_path(self) -> Path:

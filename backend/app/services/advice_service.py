@@ -1,11 +1,9 @@
 import asyncio
-import json
 from typing import Optional
-from urllib import error, request
 
-from ..config import settings
 from ..schemas.diagnosis import AdviceCitation, AdviceOut, EvidenceItem, SimilarCaseOut
 from ..schemas.prediction import PredictionItem
+from .llm_service import complete_json_object
 from ..utils.label_parser import parse_label
 
 
@@ -86,40 +84,23 @@ def _build_fallback_advice(
     )
 
 
-def _call_openai_chat(payload: dict) -> Optional[AdviceOut]:
-    if not settings.OPENAI_API_KEY:
-        return None
-
+def _call_llm_advice(payload: dict) -> Optional[AdviceOut]:
     system_prompt = (
         "你是农业植保助手。你必须只输出 JSON，字段包括：summary, condition_overview, "
         "recommended_actions, uncertainty_notice, follow_up, citations。"
         "recommended_actions 是字符串数组；citations 是数组，每项包含 evidence_id, title, source_name。"
         "输出必须保留证据引用，并明确不确定性提示。"
     )
-    body = {
-        "model": settings.OPENAI_MODEL,
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-        ],
-    }
-    req = request.Request(
-        f"{settings.OPENAI_BASE_URL.rstrip('/')}/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-        },
-        method="POST",
-    )
     try:
-        with request.urlopen(req, timeout=20) as resp:
-            content = json.loads(resp.read().decode("utf-8"))
-        message = content["choices"][0]["message"]["content"]
-        return AdviceOut.model_validate(json.loads(message))
-    except (error.URLError, KeyError, ValueError, json.JSONDecodeError):
+        result = complete_json_object(
+            instructions=system_prompt,
+            input_payload=payload,
+            max_output_tokens=1200,
+        )
+        if result is None:
+            return None
+        return AdviceOut.model_validate(result)
+    except Exception:
         return None
 
 
@@ -136,7 +117,7 @@ async def generate_advice(
         "evidences": [item.model_dump() for item in knowledge_evidence],
         "similar_cases": [item.model_dump(mode="json") for item in similar_cases],
     }
-    llm_advice = await asyncio.to_thread(_call_openai_chat, payload)
+    llm_advice = await asyncio.to_thread(_call_llm_advice, payload)
     if llm_advice is not None:
         return llm_advice
     return _build_fallback_advice(best_prediction, predictions, knowledge_evidence, similar_cases)

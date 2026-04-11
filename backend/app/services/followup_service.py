@@ -2,12 +2,10 @@ import asyncio
 import json
 from datetime import date, timedelta
 from typing import Any, Optional
-from urllib import error, request
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..config import settings
 from ..models.case import DiseaseCase
 from ..models.followup import (
     EFFECT_STATUS_IMPROVED,
@@ -30,6 +28,7 @@ from ..schemas.prediction import PredictionItem
 from ..utils.class_names import to_display_name
 from ..utils.errors import bad_request, not_found
 from ..utils.label_parser import parse_label
+from .llm_service import complete_json_object
 
 VALID_PLAN_STATUS = {PLAN_STATUS_ACTIVE, "paused", "completed", "cancelled"}
 
@@ -96,37 +95,18 @@ def _fallback_change_summary(payload: dict[str, Any]) -> str:
     )
 
 
-def _call_openai_change_summary(payload: dict[str, Any]) -> Optional[str]:
-    if not settings.OPENAI_API_KEY:
-        return None
+def _call_llm_change_summary(payload: dict[str, Any]) -> Optional[str]:
     prompt = (
         "你是农业复查分析助手。请根据输入输出 JSON："
         "{\"summary\":\"...\"}。summary 需要中文、简洁、包含病害变化与康复情况。"
         "不要写“目标置信度由A变为B”这种句式。"
     )
-    body = {
-        "model": settings.OPENAI_MODEL,
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-        ],
-    }
-    req = request.Request(
-        f"{settings.OPENAI_BASE_URL.rstrip('/')}/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-        },
-        method="POST",
-    )
     try:
-        with request.urlopen(req, timeout=20) as resp:
-            raw = json.loads(resp.read().decode("utf-8"))
-        content = raw["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
+        parsed = complete_json_object(
+            instructions=prompt,
+            input_payload=payload,
+            max_output_tokens=500,
+        )
         if not isinstance(parsed, dict):
             return None
         summary = parsed.get("summary")
@@ -134,12 +114,12 @@ def _call_openai_change_summary(payload: dict[str, Any]) -> Optional[str]:
             return None
         summary_text = summary.strip()
         return summary_text or None
-    except (error.URLError, KeyError, ValueError, json.JSONDecodeError):
+    except Exception:
         return None
 
 
 async def _generate_change_summary(payload: dict[str, Any]) -> str:
-    summary = await asyncio.to_thread(_call_openai_change_summary, payload)
+    summary = await asyncio.to_thread(_call_llm_change_summary, payload)
     if summary:
         return summary
     return _fallback_change_summary(payload)
